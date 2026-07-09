@@ -235,24 +235,6 @@ matlab-toolkit/SKILL.md
 
 ---
 
-## 🏗️ 推荐 AI 协作流程
-
-```mermaid
-graph TD
-    A[工程需求 / Bug / 新功能] --> B[选择对应 Skill]
-    B --> C{任务类型}
-    C -->|RTL 开发 / 评审| D[rtl-style]
-    C -->|MATLAB GUI 工具| E[matlab-toolkit]
-    D --> F[明确接口 / 时钟 / 复位 / CDC / AXIS]
-    E --> G[明确协议 / 串口参数 / GUI 行为 / 打包边界]
-    F --> H[AI 生成代码或评审建议]
-    G --> H
-    H --> I[本地仿真 / 静态检查 / 上板验证]
-    I --> J[将有效经验反写回 Skill]
-```
-
----
-
 ## ✅ 我希望这些 Skill 解决什么问题
 
 ### 对 RTL
@@ -326,7 +308,3 @@ graph TD
 
 目标是帮助 AI 在参与硬件开发时更加稳健、保守、工程化。
 
-```
-
-这一版就比较接近你发的那个项目 README 的观感了：有标题、有 slogan、有 badge、有导航、有功能解析、有 mermaid 流程图、有后续计划，也能体现“这是你在自己 SoPC 开发过程中沉淀出来并愿意分享交流的东西”。
-```
