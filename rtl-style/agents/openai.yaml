@@ -1,0 +1,4 @@
+interface:
+  display_name: "RTL Style"
+  short_description: "Verilog RTL coding rules for Vivado-friendly FPGA modules."
+  default_prompt: "Use $rtl-style to create or revise a synthesizable Verilog RTL module with Chinese comments, consistent style, AXIS handshakes, CDC awareness, and timing-friendly structure."
