@@ -1,0 +1,12 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Real upstream credential and generated localhost bridge secrets
+.local/opencode-go.key
+.local/local-bridge-token.txt
+.local/local-bridge-token-state.json
+
+# Local runtime artifacts
+*.log
+*.tmp

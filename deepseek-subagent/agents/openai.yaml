@@ -1,0 +1,4 @@
+interface:
+  display_name: "DeepSeek Subagent"
+  short_description: "DeepSeek child capability through OpenCode Go"
+  default_prompt: "Use $deepseek-subagent to make DeepSeek child agents available, then decide whether and how many to use from the task and user instructions."

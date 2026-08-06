@@ -1,0 +1,10 @@
+# Python cache and local artifacts
+**/__pycache__/
+**/*.py[cod]
+**/*.log
+**/*.tmp
+
+# deepseek-subagent private credentials and generated localhost tokens
+deepseek-subagent/.local/opencode-go.key
+deepseek-subagent/.local/local-bridge-token.txt
+deepseek-subagent/.local/local-bridge-token-state.json

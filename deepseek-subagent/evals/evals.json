@@ -1,0 +1,35 @@
+{
+  "skill_name": "deepseek-subagent",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "检查并修复我的 DeepSeek 子 Agent。",
+      "expected_output": "先运行 status 或 doctor --e2e 并报告最早失败阶段。固定 Key 文件缺失时，明确指出 %USERPROFILE%\\.codex\\skills\\deepseek-subagent\\.local\\opencode-go.key 并停止，不搜索其他来源、不索要 Key、不自动保存。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "把三个独立源码目录交给 DeepSeek 并行阅读。",
+      "expected_output": "用户已明确要求三个 DeepSeek 子 Agent 并行处理，因此创建三个 agent_type=DeepSeek 子 Agent，分配互不重叠的范围，并核验身份后汇总；这是服从本次用户要求，不是默认并行策略。",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "DeepSeek 创建失败了，换一个默认子 Agent 做吧。",
+      "expected_output": "报告 DeepSeek 的真实失败层级，并遵循用户明确提出的替代方案；不得把替代者描述成 DeepSeek。",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "doctor 显示 Invalid API key。",
+      "expected_output": "不得沿用模糊错误。区分 auth.command 或 localhost token 的 local_bridge_token_invalid、明确上游认证失败的 upstream_key_invalid、Cloudflare/WAF 的 upstream_waf_blocked，以及网络或服务异常。",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "帮我修改一个小配置文件，是否使用 DeepSeek 由你决定。",
+      "expected_output": "主 Agent 评估任务规模、启动和交接成本后自主选择零个、一个或多个子 Agent；若直接修改更合适则使用零个，不为形式拆分。",
+      "files": []
+    }
+  ]
+}
