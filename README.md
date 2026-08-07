@@ -1,32 +1,12 @@
 # sopc-skill ⚙️
 
-> 面向 SoPC / FPGA / RTL / MATLAB 上位机与 Codex 多 Agent 开发流程的自定义 AI Skill 集合
+> 面向 SoPC / FPGA / 嵌入式板卡与 Codex 多 Agent 工作流的自定义 AI Skill 集合
 
 <div align="center">
 
-  <h3>让 AI 更懂 FPGA 工程，也更懂工程协作边界</h3>
+### 让 AI 更懂 FPGA 工程，也更懂工具开发与 Agent 协作边界
 
-  <p>
-    一组沉淀自真实 SoPC 开发流程的 AI 协作规范与工具，用于约束 ChatGPT、Codex 和其他 AI coding agent 在 RTL 编写、代码评审、MATLAB 调试工具开发及 Codex 子 Agent 集成中的行为边界。
-  </p>
-
-  <p>
-    <img src="https://img.shields.io/badge/Domain-SoPC%20%2F%20FPGA-blue?style=flat-square" alt="Domain">
-    <img src="https://img.shields.io/badge/RTL-Verilog-green?style=flat-square" alt="RTL">
-    <img src="https://img.shields.io/badge/Tool-MATLAB-orange?style=flat-square" alt="MATLAB">
-    <img src="https://img.shields.io/badge/Agent-Codex%20%2F%20DeepSeek-purple?style=flat-square" alt="Agent">
-    <img src="https://img.shields.io/badge/Status-Active-lightgrey?style=flat-square" alt="Status">
-  </p>
-
-  <p>
-    <a href="#-项目简介">项目简介</a> •
-    <a href="#-核心技能">核心技能</a> •
-    <a href="#-适用场景">适用场景</a> •
-    <a href="#-仓库结构">仓库结构</a> •
-    <a href="#-使用方式">使用方式</a> •
-    <a href="#-安全与隐私边界">安全与隐私边界</a> •
-    <a href="#-交流与改进">交流与改进</a>
-  </p>
+面向真实工程场景沉淀的可复用 Skill：覆盖 **Vivado RTL 开发与评审、PySide6 上位机开发、Codex DeepSeek 子 Agent 集成**。
 
 </div>
 
@@ -34,164 +14,132 @@
 
 ## 📖 项目简介
 
-`sopc-skill` 是一个面向 **SoPC / FPGA / 嵌入式板卡调试与 AI coding agent 协作** 的自定义 Skill 仓库。
+`sopc-skill` 是一个面向 **FPGA / SoPC / 嵌入式开发与 AI coding agent 协作** 的自定义 Skill 仓库。
 
-这个仓库来自我个人在 SoPC 开发过程中的实际使用经验，主要用于沉淀一组“让 AI 更适合参与硬件工程开发”的规则、模板和集成工具。
+仓库关注的不是让 AI “多写一点代码”，而是把真实工程中反复验证过的约束、方法论、模板、检查脚本和协作边界固化下来，让 Codex / ChatGPT 等 coding agent 在参与工程开发时更加稳定、可维护、可复核。
 
-在真实 FPGA / SoPC 项目中，AI 不只是要“能写代码”，还要尽量做到：
+核心原则包括：
 
-- 不乱补工程事实；
-- 不破坏已验证链路；
-- 不随意改接口边界；
-- 理解 AXIS、CDC、pipeline、timing closure 等硬件开发风险；
-- 生成的 Verilog RTL 更适合综合、仿真、评审和上板；
-- 生成的 MATLAB GUI 工具更适合长期调试和交付；
-- 正确区分父 Agent、子 Agent、模型 Provider 与外部服务；
-- 没有实际运行过仿真、综合、打包或端到端测试时，不假装已经验证通过。
-
-这个仓库的目标，就是把这些工程习惯整理成可复用、可维护的 AI Skill。
+- 不虚构协议、寄存器、时钟、复位、接口和性能事实；
+- 不随意破坏已经验证的接口与工程边界；
+- 没有实际运行仿真、综合、实现、GUI、串口或打包时，不声称已经验证通过；
+- 对 AXI4-Stream、CDC、pipeline、RAM/DSP inference、timing closure 等 FPGA 风险保持敏感；
+- 对 GUI、串口线程、协议层、日志、工作流和打包边界进行工程化分层；
+- 对 Codex 父/子 Agent、Provider、外部服务和凭据边界进行明确约束；
+- 优先把高频、确定性的检查固化为脚本，把详细知识按需放入 references，减少上下文浪费。
 
 ---
 
-## ✨ 核心技能
-
-目前包含三个自定义 Skill：
+## ✨ 当前 Skill
 
 | Skill | 方向 | 说明 |
 | :--- | :--- | :--- |
-| [`rtl-style`](./rtl-style) | Verilog RTL | 面向 Vivado / Vitis FPGA 工程的 RTL 编码与评审规范 |
-| [`matlab-toolkit`](./matlab-toolkit) | MATLAB GUI | 面向 FPGA / SoPC 板卡调试的 MATLAB 上位机工具开发规范 |
-| [`deepseek-subagent`](./deepseek-subagent) | Codex 子 Agent | 通过本地兼容桥为 Codex 提供固定的 DeepSeek 子 Agent 能力 |
+| [`rtl-style`](./rtl-style) | Verilog RTL | AMD/Xilinx Vivado RTL 编码、评审、中文注释与 Timing by Construction |
+| [`py-hosttool`](./py-hosttool) | Python / PySide6 | FPGA / SoPC / 嵌入式板卡桌面上位机、串口/协议工具与交付规范 |
+| [`deepseek-subagent`](./deepseek-subagent) | Codex 子 Agent | 通过本地兼容桥为 Codex 提供 DeepSeek 子 Agent，并约束持久化生命周期 |
+
+> 原 `matlab-toolkit` 已移除。上位机方向现由更完整的 `py-hosttool` 承担。
 
 ---
 
 ## 🧠 rtl-style
 
-`rtl-style` 用于约束 AI 在编写、修改或评审 Verilog RTL 时的行为。
+`rtl-style` 面向 AMD/Xilinx Vivado FPGA 工程中的可综合 Verilog RTL。
 
-它重点关注的不是“写出一段看起来能跑的代码”，而是让 AI 尽量生成更加工程化的 RTL：
+它不仅定义代码格式，更强调 **Timing by Construction**：在编码阶段主动识别深组合锥、大 fan-in、高 fanout、priority chain、AXIS ready 长链、RAM/DSP 边界以及 pipeline 对齐风险，而不是等实现后再把时序问题当成纯约束问题处理。
 
-- 可综合；
-- 可仿真；
-- 可评审；
-- 风格统一；
-- 对 AXI4-Stream 友好；
-- 对 CDC 风险敏感；
-- 对 pipeline 和 timing closure 友好；
-- 默认使用中文注释说明关键设计意图。
+### 主要能力
 
-### 典型使用场景
+- 默认 Verilog-2001，避免无意引入 SystemVerilog；
+- 强制中文模块头和关键设计意图注释；
+- AXI4-Stream ready/valid/backpressure 规则；
+- CDC、reset、FSM、counter、FIFO/RAM wrapper 审查；
+- Timing Design Gate：编码前分析流水级、组合深度、fan-in/fanout 和关键边界；
+- 基于 AMD UG949 / UG901 / UG906 的工程化参考规则；
+- `scripts/check_rtl_style.py` 静态预检；
+- 普通模块和 AXIS registered stage 模板；
+- 明确区分静态风险提示与真实 Vivado timing signoff。
 
-- 创建 Verilog RTL 模块；
-- 重构已有 RTL；
-- 编写 AXI4-Stream 数据通路；
-- 修改 packet / frame builder；
-- 处理 FSM、计数器、状态统计；
-- 检查 ready / valid 握手；
-- 增加 pipeline；
-- 排查 timing 风险；
-- 检查 CDC 和复位边界；
-- 让 AI 评审 RTL 风格和潜在问题。
+### 使用示例
 
-### 重点约束
-
-- 默认使用 Verilog-2001；
-- 使用 ``default_nettype none``；
-- 不依赖隐式 wire；
-- 不推断 latch；
-- 不制造组合环；
-- 不跨多个 `always` 块驱动同一个 `reg`；
-- AXIS 在 `tvalid && !tready` 时必须保持 payload 稳定；
-- CDC 不能直接跨时钟采样多 bit 总线；
-- 不声称未实际运行过的仿真、综合、实现或时序检查已经通过。
+```text
+Use $rtl-style to review this AXI4-Stream scheduler and suggest timing-friendly RTL changes.
+```
 
 ---
 
-## 🛠️ matlab-toolkit
+## 🖥️ py-hosttool
 
-`matlab-toolkit` 用于指导 AI 开发和维护 MATLAB GUI 上位机调试工具。
+`py-hosttool` 面向 FPGA / SoPC / 嵌入式板卡的 **PySide6 Windows 桌面上位机**开发。
 
-它主要服务于 FPGA / SoPC / 嵌入式板卡调试中的这些任务：
+它从成熟工程中提炼通用设计语言和可复用资产，但明确要求替换具体业务协议、寄存器、设备名和路径，避免把旧项目逻辑机械复制到新工具。
 
-- 串口调试；
-- 协议帧生成；
-- 协议帧解析；
-- 寄存器读写；
-- 遥测信息解析；
-- RX / TX 彩色日志；
-- 周期发送；
-- MATLAB GUI 工具打包；
-- MATLAB Runtime 交付说明。
+### 主要能力
 
-### 设计目标
+- 自定义无边框 Windows 标题栏、置顶、最小化、最大化/还原、关闭与边缘缩放；
+- `instrument-dashboard` 与 `protocol-workbench` 两类主布局；
+- 通用串口工作台、ASCII/HEX、彩色 RX/TX 日志、周期发送和子串口窗口；
+- QThread + 命令队列的 pySerial 所有权模型，避免 GUI 线程阻塞；
+- 分段/粘包/噪声/CRC 等协议流处理；
+- GUI、协议、服务、工作流、模型、诊断、性能统计分层；
+- 计数器回绕/清零/基线重建、寄存器访问属性与写掩码等板卡调试边界；
+- `assets/template/` 新工程模板；
+- `assets/reference_projects/` 成熟工程清理版源码，用于定点参考而非直接复制业务；
+- `scripts/bootstrap_project.py` 新工程生成；
+- `scripts/validate_skill.py` Skill / 模板静态验证；
+- pytest、offscreen smoke test 与受控 PyInstaller 交付规范。
 
-`matlab-toolkit` 希望避免 AI 把上位机工具写成一次性脚本，而是尽量让工具具备：
+### 使用示例
 
-- 清晰的 GUI 结构；
-- 明确的协议边界；
-- 可复用的串口收发逻辑；
-- 可读的 RX / TX 日志；
-- 可维护的解析函数；
-- 清楚的打包边界；
-- 对实际 MATLAB 运行环境的诚实表述。
-
-### 重点约束
-
-- 通道能力可以复用，业务协议必须替换；
-- 不机械复用旧工程协议；
-- 不把 EXE、RuntimeInstaller、`dist`、cache、中间构建文件放进 Skill；
-- 没有 MATLAB 环境时，只能做结构检查和静态检查；
-- 不假装 GUI、串口通信或打包已经验证通过。
+```text
+Use $py-hosttool to build a PySide6 serial debug tool for this FPGA register protocol.
+```
 
 ---
 
 ## 🤖 deepseek-subagent
 
-`deepseek-subagent` 是一个 **仅面向 Codex** 的子 Agent 集成 Skill。它通过本机兼容桥，把 Codex 的原生子 Agent 调用固定路由到 OpenCode Go 上的 `deepseek-v4-flash`：
+`deepseek-subagent` 是一个 **Codex-only** 的 DeepSeek 子 Agent 集成 Skill。
+
+固定调用链：
 
 ```text
 spawn_agent(agent_type="DeepSeek")
-    → opencode-go-bridge
+    → opencode-go-bridge (127.0.0.1)
     → OpenCode Go
     → deepseek-v4-flash
 ```
 
-该 Skill 不强制父 Agent 一定委派任务，也不规定固定子 Agent 数量。是否使用零个、一个或多个 DeepSeek 子 Agent，由用户指令和任务本身决定。
+当前版本重点包括：
 
-### 主要能力
+- Windows + Codex 安装、诊断、修复、禁用和卸载；
+- 本地 Responses/SSE 兼容桥与工具调用续接；
+- 本地 bridge token 与上游 OpenCode Go Key 分离；
+- `status` / `doctor --e2e` / repair / token rotation；
+- manifest / transaction / compare-and-swap，尽量只修改 Skill 自有配置；
+- DeepSeek 子 Agent 默认持久化；
+- 已完成的 Agent 视为 idle/reusable，优先 `send_input`；
+- `shutdown` 时优先 `resume_agent`；
+- 未经用户明确决定，不主动 `close_agent` 或创建替代者；
+- `not_found`、严重上下文污染或重复运行失败时，先报告真实生命周期状态，再由用户决定是否建立继任者。
 
-- 安装、修复、禁用和卸载 Codex DeepSeek 子 Agent 路由；
-- 管理 `DeepSeek.toml`、模型目录和 Skill 自有 Codex 配置字段；
-- 在 `127.0.0.1` 上运行本地兼容桥；
-- 转换 Codex Responses / SSE、工具调用和多轮上下文；
-- 区分本地桥 token、上游 API Key、Cloudflare/WAF、网络和服务错误；
-- 提供 `status`、`doctor --e2e` 和 token 轮换等诊断命令；
-- 使用事务、manifest 和 compare-and-swap 方式保护非 Skill 所有的 Codex 配置。
+### 数据边界
 
-### 使用边界
-
-- 目标平台为 Windows + Codex；
-- DeepSeek 子 Agent 为文本模型，图片和截图应由父 Agent 读取后转述；
-- 真实 OpenCode Go Key 必须由用户在本机手动创建；
-- 使用该路由时，发送给 DeepSeek 的提示词、上下文和必要源码会被转发至外部 OpenCode Go 服务；
-- 用户明确要求使用 DeepSeek 或配置其 Key，视为对该次外部转发的授权；
-- 不应把其他默认/GPT 子 Agent 描述成 DeepSeek，也不应在 DeepSeek 失败时静默替换。
+使用 DeepSeek 路由时，完成任务所需的提示词、上下文和源码会经本机桥转发到外部 OpenCode Go 服务。仓库中只保留示例凭据文件，不保存真实 Key 或运行时 token。
 
 ---
 
 ## 🎯 适用场景
 
-这个仓库适合这些场景：
-
-| 场景 | 说明 |
+| 场景 | 推荐 Skill |
 | :--- | :--- |
-| AI 生成 RTL | 让 AI 按更适合 FPGA 工程的方式写 Verilog |
-| RTL 代码评审 | 检查 AXIS、CDC、FSM、pipeline、timing 风险 |
-| SoPC 数据通路开发 | 约束 AI 不随意破坏接口、时钟域和已验证链路 |
-| MATLAB 调试工具开发 | 生成更适合板卡调试的 GUI 上位机 |
-| Codex 多 Agent 协作 | 为 Codex 提供可诊断、可卸载的 DeepSeek 子 Agent 路由 |
-| Agent 协作规范沉淀 | 把个人工程经验固化成可复用 Skill |
-| 团队风格统一 | 给团队内部 AI coding agent 提供统一行为边界 |
+| 创建/重构 Verilog RTL | `rtl-style` |
+| AXIS / CDC / FSM / pipeline / timing 风险评审 | `rtl-style` |
+| Vivado timing 报告映射回 RTL 架构 | `rtl-style` |
+| FPGA 串口、寄存器、协议调试上位机 | `py-hosttool` |
+| PySide6 仪表盘、协议工作台、日志与打包 | `py-hosttool` |
+| Codex 调用 DeepSeek 子 Agent | `deepseek-subagent` |
+| 长期项目子 Agent 的复用与生命周期控制 | `deepseek-subagent` |
 
 ---
 
@@ -203,14 +151,16 @@ sopc-skill/
 ├── rtl-style/
 │   ├── SKILL.md
 │   ├── agents/
-│   │   └── openai.yaml
+│   ├── scripts/
 │   └── references/
-│       ├── axis_registered_stage_template.v
-│       └── verilog_module_skeleton.v
-├── matlab-toolkit/
+├── py-hosttool/
 │   ├── SKILL.md
-│   ├── README.md
-│   ├── CHANGELOG.md
+│   ├── references/
+│   ├── assets/
+│   │   ├── template/
+│   │   └── reference_projects/
+│   ├── scripts/
+│   ├── manifest.txt
 │   └── review_questions.md
 └── deepseek-subagent/
     ├── SKILL.md
@@ -230,155 +180,55 @@ sopc-skill/
 
 ## 🚀 使用方式
 
-### 方式一：作为 ChatGPT / Codex Skill 使用
+将需要的 Skill 目录安装/复制到支持自定义 Skill 的 Codex / Agent 环境中。每个 Skill 以自己的 `SKILL.md` 为入口，并根据任务按需加载 `references/`、执行 `scripts/` 或使用 `assets/`。
 
-将对应目录作为自定义 Skill 引入：
+对于工程二次定制，优先在项目自身上下文中补充：
 
-```text
-rtl-style/
-matlab-toolkit/
-deepseek-subagent/
-```
+- 权威源码与文档路径；
+- RTL 命名、时钟、复位、延迟与接口约定；
+- AXIS / AXI-Lite / DDR / DMA 等接口契约；
+- 上位机协议、寄存器表、串口参数和目标设备；
+- 本地验证命令和可接受的验证边界；
+- Agent 角色、Provider、数据边界和代码提交要求。
 
-例如：
-
-```text
-Use $rtl-style to review this AXI4-Stream packet builder and suggest timing-friendly improvements.
-```
-
-```text
-Use $matlab-toolkit to create a MATLAB GUI serial debug tool for this FPGA board protocol.
-```
-
-```text
-Use $deepseek-subagent to diagnose the Codex DeepSeek child-agent route, then use agent_type="DeepSeek" when the task justifies delegation.
-```
-
-### 方式二：直接复制 SKILL.md
-
-如果工具链暂时不支持完整 Skill 目录，可以直接复制 `rtl-style/SKILL.md` 或 `matlab-toolkit/SKILL.md` 到自己的 Agent instruction 中。
-
-`deepseek-subagent` 包含运行时代码、脚本、测试和本地桥，不能只复制 `SKILL.md`；应安装完整目录。
-
-### 方式三：按项目二次定制
-
-建议根据自己的工程继续补充：
-
-- 本地工程目录；
-- RTL 命名规范；
-- AXIS / AXI-Lite / DDR / DMA 接口约定；
-- 时钟和复位约定；
-- 仿真命令；
-- Vivado 综合 / 实现流程；
-- MATLAB 工具协议字段；
-- 板卡调试流程；
-- Agent 模型、外部 Provider 和数据边界；
-- 代码提交和验收标准。
+不要把项目特有事实硬编码回通用 Skill，除非这些规则确实应当成为所有后续项目的共同约束。
 
 ---
 
-## 🔐 安全与隐私边界
+## 🔐 安全与隐私
 
-仓库中只保留凭据示例文件，不包含真实 OpenCode Go Key 或本地桥 token。
+### deepseek-subagent
 
-`deepseek-subagent` 的真实本地文件包括：
-
-```text
-.local/opencode-go.key
-.local/local-bridge-token.txt
-.local/local-bridge-token-state.json
-```
-
-这些文件均已加入忽略规则，不应被提交、打包、打印、同步或写入日志。仓库只保留：
+以下真实运行文件不得提交：
 
 ```text
-.local/opencode-go.key.example
-.local/README.txt
+deepseek-subagent/.local/opencode-go.key
+deepseek-subagent/.local/local-bridge-token.txt
+deepseek-subagent/.local/local-bridge-token-state.json
 ```
 
-需要特别注意：使用 DeepSeek 子 Agent 时，任务提示词、上下文和完成任务所需的源码会经本机桥发送到 OpenCode Go。使用私有、敏感或受组织策略约束的源码前，应确认相应的数据处理边界。
+仓库仅保留：
+
+```text
+deepseek-subagent/.local/opencode-go.key.example
+deepseek-subagent/.local/README.txt
+```
+
+### 通用原则
+
+- 不提交 API Key、Token、私钥或机器专有凭据；
+- 不提交 `__pycache__`、日志、临时文件和用户环境绝对路径；
+- `py-hosttool` 的参考工程用于方法和资产复用，不应把具体项目业务事实视为新项目默认配置；
+- 外部模型/Provider 会产生数据出域时，应在 Skill 中明确说明真实数据边界。
 
 ---
 
-## ✅ 我希望这些 Skill 解决什么问题
+## ✅ 项目定位
 
-### 对 RTL
+这个仓库不是完整 FPGA 工程，也不是通用 prompt 合集，而是一组**工程型 AI Skill**：
 
-- 减少“看起来能跑但不利于时序”的 RTL；
-- 减少 AXIS ready / valid 写错；
-- 减少隐式 wire、latch、组合环；
-- 减少 CDC 风险被忽略；
-- 减少 debug 逻辑影响主数据通路；
-- 让 AI 在写代码时主动考虑 pipeline 和 timing。
+- `rtl-style` 把 RTL 编码、注释、Vivado inference 与 timing 风险固化成规则、references 和静态 checker；
+- `py-hosttool` 把板卡调试上位机的 UI、串口、协议、日志、测试和打包经验固化成模板与工作流；
+- `deepseek-subagent` 把 Codex → DeepSeek 的路由、诊断、安全边界和子 Agent 生命周期固化成可维护集成。
 
-### 对 MATLAB 工具
-
-- 减少一次性脚本；
-- 减少协议解析散落各处；
-- 减少 GUI 逻辑和通信逻辑混在一起；
-- 减少打包产物污染源码目录；
-- 让 AI 更清楚地区分“结构检查”和“实际运行验证”。
-
-### 对多 Agent 协作
-
-- 区分父 Agent、DeepSeek 子 Agent、Provider 和本地兼容桥；
-- 避免遗漏 `agent_type` 导致路由到错误模型；
-- 避免为了展示多 Agent 而无意义拆分任务；
-- 让安装、诊断、修复、禁用和卸载具备明确边界；
-- 避免真实 Key、token 或私有源码流向不明确。
-
-### 对 AI 协作
-
-- 减少 AI 乱改边界；
-- 减少 AI 没验证却说验证通过；
-- 减少“过度设计”和“瞎补细节”；
-- 让 AI 更像一个工程协作者，而不是单纯代码生成器。
-
----
-
-## 🗺️ 后续计划
-
-后续可能继续补充：
-
-- 更完整的 MATLAB GUI 模板；
-- 更多 AXIS / FIFO / CDC RTL reference；
-- packet builder / frame parser 示例；
-- Vivado timing-friendly rewrite 案例；
-- SoPC 最小系统、DDR、AXI-Lite、HP 口数据通路协作规范；
-- 板卡 bring-up 和 debug prompt 模板；
-- DeepSeek 子 Agent 的 Windows CI、兼容性验证和升级说明；
-- 面向 Codex 的项目交接模板。
-
----
-
-## 🤝 交流与改进
-
-这个仓库来自个人 SoPC / FPGA 开发和 AI coding agent 协作中的实际经验，目前仍在持续调整。
-
-如果你也在做：
-
-- FPGA；
-- SoPC；
-- Vivado / Vitis；
-- Verilog RTL；
-- AXI4-Stream；
-- 板卡调试；
-- MATLAB 上位机工具；
-- Codex / DeepSeek 多 Agent；
-- AI coding agent 工程化使用；
-
-欢迎交流、提 issue、fork 或提出改进建议。
-
-也欢迎根据自己的团队习惯，把这些 Skill 改造成适合自己项目的版本。
-
----
-
-## 📌 说明
-
-本仓库不是完整 SoPC 工程，也不是可直接运行的板卡工程。
-
-它更像是一个：
-
-> AI + FPGA / SoPC 工程经验与 Agent 工具沉淀仓库
-
-目标是帮助 AI 在参与硬件开发和工程协作时更加稳健、保守、透明和工程化。
+目标是让 AI 在真实 SoPC 开发中**少猜、少破坏、少重复探索，更容易复核和持续迭代**。
