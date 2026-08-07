@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+build/
+release/
+dist/
+*.log
+serial_console_log.txt
