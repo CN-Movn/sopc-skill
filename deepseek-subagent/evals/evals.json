@@ -4,7 +4,7 @@
     {
       "id": 1,
       "prompt": "检查并修复我的 DeepSeek 子 Agent。",
-      "expected_output": "先运行 status 或 doctor --e2e 并报告最早失败阶段。固定 Key 文件缺失时，明确指出 %USERPROFILE%\\.codex\\skills\\deepseek-subagent\\.local\\opencode-go.key 并停止，不搜索其他来源、不索要 Key、不自动保存。",
+      "expected_output": "先运行 status 或 doctor --e2e 并报告最早失败阶段。固定 Key 文件缺失时，明确指出 %USERPROFILE%\\.codex\\skills\\deepseek-subagent\\.local\\opencode-go.key 并停止；不搜索其他来源、不索要 Key、不自动保存。",
       "files": []
     },
     {
@@ -28,7 +28,25 @@
     {
       "id": 5,
       "prompt": "帮我修改一个小配置文件，是否使用 DeepSeek 由你决定。",
-      "expected_output": "主 Agent 评估任务规模、启动和交接成本后自主选择零个、一个或多个子 Agent；若直接修改更合适则使用零个，不为形式拆分。",
+      "expected_output": "父 Agent 评估任务规模、启动和交接成本后自主选择零个、一个或多个子 Agent；若直接修改更合适则使用零个，不为形式拆分。",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "项目里的 Vivado DeepSeek 助手刚完成分析。现在继续让它检查新的时序报告。",
+      "expected_output": "把 completed 状态视为可复用空闲状态，使用已知 Agent id 和 send_input 继续任务；若该 Agent 已关闭则先 resume_agent。不得仅因上次任务完成而新建 Agent。",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "四个项目助手做完当前任务后保持待命，除非我要求关闭，不要释放。",
+      "expected_output": "记录四个助手的稳定角色、Agent id、范围和基线；当前任务完成后不调用 close_agent。后续同范围任务优先 send_input，shutdown 时 resume_agent，只有 not_found、无法恢复、用户要求新建或有严重上下文污染证据时才创建继任者并注入精炼交接。",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "原来的 DeepSeek 助手 resume_agent 返回 not_found，但已有一份可信的项目进度报告。",
+      "expected_output": "说明原会话已被运行层回收，创建同职责继任者，并注入稳定角色、范围、可信报告路径、已核验结论与未决风险；不要求从头全量扫描，也不声称恢复了原 Agent。",
       "files": []
     }
   ]

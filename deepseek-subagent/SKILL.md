@@ -1,6 +1,6 @@
 ---
 name: deepseek-subagent
-description: Manage the Codex-only DeepSeek subagent integration through OpenCode Go and provide its correct native invocation route when Codex chooses to use it. Use for installation, diagnosis, testing, repair, disable/uninstall, or DeepSeek child-agent access; this Skill does not prescribe whether or how many child agents to create.
+description: Manage the Codex-only DeepSeek subagent integration through OpenCode Go and provide its correct native invocation route and reusable child-agent lifecycle. Use for installation, diagnosis, testing, repair, disable/uninstall, DeepSeek child-agent access, or maintaining long-lived project assistants; prefer reusing or resuming an existing scoped child before creating a replacement. This Skill does not prescribe whether or how many child agents to create.
 ---
 
 # DeepSeek subagent
@@ -24,6 +24,23 @@ Choose context inheritance, scope, sequencing, and concurrency for the actual ta
 Do not omit `agent_type` or present an OpenAI/GPT/default child as DeepSeek. If DeepSeek fails, report the real failure layer. If the user specifically required DeepSeek, do not silently substitute another route; otherwise the parent may revise the plan and continue directly or with another appropriate capability.
 
 DeepSeek is text-only. The parent must inspect images, video, and screenshots and provide any needed facts as text.
+
+## Reusable child-agent lifecycle
+
+Preserve a DeepSeek child's accumulated project context when the user establishes an ongoing project assistant or otherwise requests continuity. Treat a completed child as idle and reusable, not disposable. A child finishing one assignment is not the end of the parent project's lifecycle.
+
+For each reusable child, retain its Agent id, role, project scope, canonical source paths, verified baselines, and unresolved risks in the parent context. The service-generated nickname may differ from the stable role name chosen for the project; route later work by the stable role and Agent id.
+
+Before spawning a new DeepSeek child for a related scope:
+
+1. Reuse the known open child with `send_input`.
+2. If the child was closed or is in `shutdown`, call `resume_agent` and then reuse it.
+3. Spawn a replacement only when the prior Agent is `not_found`, cannot be resumed, the user explicitly requests a new child, or the parent has concrete evidence of severe hallucination, corrupted context, or repeated operational failure.
+4. When replacement is necessary, report why, preserve the stable role, and seed the replacement with a concise handoff containing canonical artifacts and verified facts. Do not force a full repository rescan when a trustworthy report or evidence index already exists.
+
+Do not close a persistent assistant merely because its current assignment completed, a final response was delivered, or it is temporarily idle. Keep it available across related turns until the user explicitly asks to close it, the overarching project or delegated role is genuinely complete, or severe context corruption makes continued reuse unsafe. If concurrency pressure arises, close non-persistent children first; do not silently sacrifice user-requested continuity.
+
+Ordinary one-shot children that were not established as reusable may still be closed after their results are integrated and no foreseeable related work remains. Explicit user lifecycle instructions override that default.
 
 ## Lifecycle
 
