@@ -55,7 +55,7 @@
 | Skill | 当前版本 | 主要解决什么问题 | 核心优势 |
 | :--- | :---: | :--- | :--- |
 | [`rtl-style`](./rtl-style) | **v2.2.1** | AI 写 RTL 容易只顾功能、忽略时序/CDC/可维护性 | 中文注释硬约束、Timing by Construction、AMD 官方方法论、静态 checker、RTL 模板 |
-| [`py-hosttool`](./py-hosttool) | **v1.2** | Python 上位机项目经常从零搭壳、重复踩 GUI/串口/线程坑 | 复用成熟 PySide6 设计语言、完整模板、参考工程、串口资产、窗口框架与交付流程 |
+| [`py-hosttool`](./py-hosttool) | **v1.2.1** | Python 上位机项目经常从零搭壳、重复踩 GUI/串口/线程坑 | 复用成熟 PySide6 设计语言、完整模板、参考工程、串口资产、窗口框架与交付流程 |
 | [`deepseek-subagent`](./deepseek-subagent) | **v1.4.3** | Codex 子 Agent 成本高、重复扫代码、生命周期不可控 | 固定 DeepSeek 路由、可诊断本地桥、长期 Agent 复用、用户掌握关闭/替换权 |
 
 三者分别对应一个真实工程链条：
