@@ -74,189 +74,57 @@ AI 多 Agent 协作与成本控制
 
 ## 🧠 rtl-style —— 让 AI 写出更像工程代码的 RTL
 
-[`rtl-style`](./rtl-style) 面向 **Vivado / Verilog RTL 创建、修改和评审**。
+[`rtl-style`](./rtl-style) 面向 **Vivado / Verilog RTL 创建、修改和评审**，重点不是“语法能过”，而是让 AI 更早考虑时序、CDC、握手、资源推断和可维护性。
 
-它关注的不是“这段 RTL 看起来能不能工作”，而是更接近 FPGA 工程真正关心的问题：
+### 🌟 核心卖点
 
-- 组合锥是否过深；
-- priority / large fan-in 是否会形成关键路径；
-- high-fanout 控制是否会拖累实现；
-- AXI4-Stream ready/valid 是否正确；
-- pipeline 是否真的切断关键路径，而不是只移动寄存器；
-- RAM / DSP 是否按预期 inference；
-- CDC / reset 是否存在结构性风险；
-- sideband、数据和状态在加 pipeline 后是否仍然对齐。
+- **中文注释 Hard Contract**：模块头、FSM、handshake、CDC、pipeline 等关键结构必须说明设计意图。
+- **Timing by Construction**：编码前识别深组合、priority、fan-in/fanout、ready chain、RAM/DSP 和 pipeline 风险，而不是等 WNS 出问题再补救。
+- **AMD 官方方法论落地**：把 UG949 / UG901 / UG906 中与 RTL 结构、综合推断、时序分析相关的原则转成可执行规则。
+- **Checker + RTL 模板**：`check_rtl_style.py` 做低成本静态 preflight，并提供 AXIS registered stage、module skeleton 等可直接复用模板。
+- **Progressive Disclosure**：核心约束留在 `SKILL.md`，详细依据和反例按需加载，减少上下文浪费。
 
-### 🌟 这套 Skill 的差异点
-
-**1. 中文注释不是“建议”，而是 Hard Contract**
-
-模块功能、时钟复位、接口、数据流、延迟、CDC、时序设计和边界条件都有明确最低要求；复杂 FSM、handshake、counter、CDC、pipeline 等也要求说明设计意图。
-
-**2. Timing by Construction：时序问题尽量在编码前解决**
-
-不是等综合后看到 WNS 再救火，而是在写 RTL 前先做 Timing Design Gate：识别深组合路径、priority、fan-in/fanout、ready chain、RAM/DSP、entry scan、CDC 和 pipeline 需求。
-
-**3. AMD 官方方法论不是摆在 reference 里吃灰**
-
-Skill 把 UG949 / UG901 / UG906 中与 RTL 结构、综合推断、时序分析有关的内容提炼成可执行规则，并与实际 review/checker 形成闭环。
-
-**4. 能确定性检查的规则交给脚本**
-
-`scripts/check_rtl_style.py` 会检查中文模块头、复杂 always 注释、明显 priority 链、ready 组合链等静态风险。它不是 Vivado 的替代品，而是一个低成本 preflight。
-
-**5. Progressive Disclosure，减少上下文浪费**
-
-`SKILL.md` 只保留必须执行的核心 contract；详细方法、反例和官方依据下沉到 `references/`，按任务复杂度加载。
-
-### 适合这些任务
-
-- 新建 Verilog RTL 模块；
-- AXI4-Stream 数据通路；
-- FSM / scheduler / arbitration；
-- counter / statistics / packet builder；
-- RAM / DSP / pipeline 结构修改；
-- timing 违例前置规避和静态评审；
-- CDC / reset / handshake 检查；
-- 对现有 RTL 做工程化 review。
+适合 AXI4-Stream、FSM / scheduler、RAM / DSP / pipeline、CDC / reset，以及现有 RTL 的工程化 review。
 
 ---
 
 ## 🖥️ py-hosttool —— 把成熟上位机设计语言真正复用起来
 
-[`py-hosttool`](./py-hosttool) 面向 **FPGA / SoPC / 嵌入式板卡的 PySide6 上位机开发**。
+[`py-hosttool`](./py-hosttool) 面向 **FPGA / SoPC / 嵌入式板卡的 PySide6 上位机开发**，核心资产来自 `ArqMinSystem_v1.1` 与 `MasterController_v1.4` 两套实际工程，而不是从零拼 GUI demo。
 
-它不是从网上总结一套“Python GUI 最佳实践”，而是从两个已经实际开发、反复调整过的上位机项目中提炼：
+### 🌟 核心卖点
 
-- `ArqMinSystem_v1.1`
-- `MasterController_v1.4`
+- **成熟窗口框架**：复用无边框标题栏、置顶、最小化、最大化 / 还原、原生边缘缩放等完整桌面交互。
+- **两类现成布局**：设备诊断仪表盘 + 协议串口工作台，可直接作为新工具的信息架构起点。
+- **工程级串口资产**：彩色 RX/TX 日志、动态 HEX、滚动保持、周期发送、子串口窗口，以及 `QThread + command queue` 的 pySerial 所有权模型。
+- **模板与真实参考工程一起提供**：`assets/template/` 可直接起项目，`reference_projects/` 用于追溯成熟实现。
+- **复用边界明确**：窗口、布局、日志和线程框架可以继承；寄存器、协议帧、命令字和业务状态机必须按新项目重建。
 
-目标不是让每个新项目重新搭一套 GUI，而是把成熟的窗口、布局、串口、日志、线程和交付资产直接变成下一套工具的起点。
-
-### 🌟 这套 Skill 的差异点
-
-**1. 复用的是“设计语言”，不是只抄几个控件**
-
-保留成熟的无边框窗口体系，包括：
-
-- 固定 / 置顶；
-- 最小化；
-- 最大化 / 还原；
-- 关闭；
-- Windows 原生边缘缩放；
-- 自定义标题栏与窗口状态同步。
-
-因此新工具不需要每次从 `QMainWindow` 默认壳子重新摸索。
-
-**2. 已经沉淀两类典型布局**
-
-- **设备诊断仪表盘**：适合状态、统计、性能、告警和诊断；
-- **协议串口工作台**：适合命令、帧解析、日志、周期发送和联调。
-
-Agent 可以先判断项目属于哪一类，再复用对应框架，而不是把所有功能堆到一个窗口里。
-
-**3. 串口不是 demo 级 `serial.read()`**
-
-成熟资产包括：
-
-- 串口参数区；
-- RX 绿色 / TX 蓝色日志；
-- 动态 HEX 排版；
-- 滚动保持；
-- 发送区；
-- 周期发送状态机；
-- 子串口窗口；
-- `QThread + command queue` 的 pySerial 所有权模型。
-
-重点是把串口线程所有权、UI 更新和业务协议拆开，避免后期越改越乱。
-
-**4. Skill 内直接保留 starter template 和 reference projects**
-
-不是只有说明文档。`assets/` 里保留可以直接作为新项目骨架的模板，以及成熟工程的参考资产，方便 AI 对照复用真实实现。
-
-**5. 明确“可复用资产”和“必须替换的业务语义”**
-
-窗口框架、布局、日志、线程、串口工作流可以复用；寄存器、协议帧、命令字、业务状态机必须根据新项目重新定义，避免把旧工程协议机械复制进新工具。
-
-### 适合这些任务
-
-- 新建 FPGA/嵌入式板卡调试上位机；
-- 从串口 demo 升级到可长期维护的 GUI；
-- 复用成熟窗口标题栏和布局；
-- 做设备状态/吞吐/错误统计仪表盘；
-- 做协议帧收发与日志工作台；
-- 用 PyInstaller 打包交付；
-- 审查现有 PySide6 项目的线程、串口和结构边界。
+适合板卡调试工具、设备诊断 / 性能仪表盘、协议收发工作台，以及现有 PySide6 项目的结构化改造。
 
 ---
 
 ## 🤖 deepseek-subagent —— 让 Codex 拥有可持续复用的低成本子 Agent
 
-[`deepseek-subagent`](./deepseek-subagent) 是一个 **仅面向 Codex** 的 DeepSeek 子 Agent 集成 Skill。
-
-它通过本机兼容桥把 Codex 原生子 Agent 调用固定路由到 OpenCode Go 上的 `deepseek-v4-flash`：
+[`deepseek-subagent`](./deepseek-subagent) 是一个 **仅面向 Codex** 的 DeepSeek 子 Agent 集成 Skill，通过本机桥固定路由到 OpenCode Go 的 `deepseek-v4-flash`。
 
 ```text
 spawn_agent(agent_type="DeepSeek")
     ↓
-opencode-go-bridge   (127.0.0.1)
+opencode-go-bridge
     ↓
-OpenCode Go
-    ↓
-deepseek-v4-flash
+OpenCode Go / deepseek-v4-flash
 ```
 
-### 🌟 这套 Skill 的差异点
+### 🌟 核心卖点
 
-**1. 目标不是“多开几个 Agent”，而是降低长期协作成本**
+- **长期复用上下文**：子 Agent 默认持久化，同范围任务优先 `send_input`，shutdown 时优先 `resume_agent`，避免反复从头扫描工程。
+- **关闭 / 替换权属于用户**：任务完成、暂时 idle、容量压力都不自动触发 `close_agent`；异常 Agent 也先报告证据，再由用户决定是否替换。
+- **低成本固定路由**：把适合扫描、review、局部实现和重复工作的任务稳定交给 DeepSeek，降低长期多 Agent 协作成本。
+- **正式可诊断运行时**：支持 setup / repair / disable / uninstall、`status`、`doctor --e2e`、token / provider / bridge 状态管理。
+- **数据边界明确**：本机桥会把完成任务所需的提示词、上下文和源码转发到外部 OpenCode Go 服务，私有代码使用前应确认边界。
 
-大型工程第一次探索最贵：扫目录、找权威文件、理解模块关系、建立术语、识别风险。真正节省 token 的方式，是让已经熟悉工程的子 Agent 尽可能复用，而不是每轮都新建一个重新探索。
-
-**2. v1.4.3 默认把每个 DeepSeek 子 Agent 视为持久化助手**
-
-任务完成只代表 idle，不代表应该释放：
-
-```text
-同范围新任务
-    → 优先 send_input
-
-Agent shutdown
-    → 优先 resume_agent
-
-not_found / 无法恢复
-    → 报告用户并等待是否创建继任者
-```
-
-主 Agent 不再因为“这轮任务结束了”就擅自 `close_agent`。
-
-**3. 关闭和替换权交给用户**
-
-即使出现容量压力、上下文污染或 Agent 看似暂时用不到，也不能悄悄关闭或替换长期助手。这样项目上下文不会因为主 Agent 的一次生命周期判断被轻易丢掉。
-
-**4. 本地桥是可安装、可诊断、可修复、可卸载的正式运行时**
-
-包含：
-
-- Codex Agent / provider 配置管理；
-- localhost token；
-- Responses / SSE 转换；
-- tool call；
-- 多轮上下文；
-- `status` / `doctor --e2e`；
-- setup / repair / disable / uninstall；
-- 配置事务、manifest 和 compare-and-swap 保护。
-
-**5. 对外部数据边界保持明确**
-
-DeepSeek 路由经本机桥连接 OpenCode Go，因此发送给子 Agent 的提示词、上下文和完成任务所需的源码会被转发到外部服务。Skill 会明确区分本地桥 token、上游 Key、网络/WAF 和模型服务错误，不把这些边界混在一起。
-
-### 适合这些任务
-
-- 给大型工程建立长期 RTL / Vivado / Vitis / Python 助手；
-- 让便宜模型承担代码扫描、review、局部实现和重复性工作；
-- 避免同一个项目被不同子 Agent 反复从头探索；
-- 在 Codex 中建立可诊断的 DeepSeek 子 Agent 路由；
-- 对 Agent 生命周期、继任和上下文连续性做更严格控制。
+适合大型 RTL / Vivado / Vitis / Python 工程中的长期专项助手和低成本多 Agent 协作。
 
 ---
 
