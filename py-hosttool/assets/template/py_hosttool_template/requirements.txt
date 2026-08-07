@@ -1,0 +1,4 @@
+PySide6>=6.8
+pyserial>=3.5
+pytest>=8
+pyinstaller>=6

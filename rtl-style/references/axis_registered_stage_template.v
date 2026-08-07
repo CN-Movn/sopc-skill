@@ -1,9 +1,12 @@
 // -----------------------------------------------------------------------------
 // 模块名称：axis_registered_stage_template
-// 功能说明：单时钟 AXI4-Stream 寄存级，带 1 级 skid buffer，支持 backpressure。
-// 时钟复位：clk，低有效同步复位 rst_n。
-// 延迟说明：前向数据路径增加 1 级寄存。
-// 吞吐说明：上下游都不阻塞时，每周期传输 1 个 beat。
+// 功能说明：单时钟 AXI4-Stream 弹性寄存级，切断前向数据路径并提供 1 个额外暂存位置。
+// 时钟复位：clk；rst_n 为低有效同步复位（集成时服从项目 reset 约定）。
+// 接口说明：标准 valid/ready；输出阻塞期间 payload 与 qualifier 保持稳定。
+// 数据流与延迟：无阻塞时前向增加 1 拍；稳态支持每拍 1 beat。
+// CDC 说明：单时钟域，不承担 CDC；跨时钟必须在本模块外使用 async FIFO/握手。
+// 时序设计：s_axis_tready 仅由本地占用状态决定，避免把下游 ready 长距离组合反馈到上游。
+// 边界说明：下游阻塞时最多额外缓存 1 beat；所有 sideband 与 tdata 同步保存。
 // -----------------------------------------------------------------------------
 `timescale 1ns / 1ps
 `default_nettype none
@@ -37,14 +40,15 @@ module axis_registered_stage_template #(
     reg                  skid_tlast_r;
     reg [USER_WIDTH-1:0] skid_tuser_r;
 
-    wire s_axis_fire;
-    wire output_ready_w;
+    wire input_fire_w;
+    wire output_accept_w;
 
-    // ready 只依赖本地 skid 寄存器，避免形成很深的下游组合反压路径。
-    assign s_axis_tready = !skid_tvalid_r;
-    assign s_axis_fire   = s_axis_tvalid && s_axis_tready;
-    assign output_ready_w = !m_axis_tvalid || m_axis_tready;
+    // ready 只依赖本地 skid 占用状态：避免形成“下游 ready -> 多级组合 -> 上游 ready”的长反压链。
+    assign s_axis_tready  = !skid_tvalid_r;
+    assign input_fire_w   = s_axis_tvalid && s_axis_tready;
+    assign output_accept_w = !m_axis_tvalid || m_axis_tready;
 
+    // 弹性寄存逻辑：输出被阻塞时保持 m_axis_*，并将额外输入 beat 暂存在 skid 寄存器。
     always @(posedge clk) begin
         if (!rst_n) begin
             m_axis_tdata   <= {DATA_WIDTH{1'b0}};
@@ -58,7 +62,7 @@ module axis_registered_stage_template #(
             skid_tlast_r   <= 1'b0;
             skid_tuser_r   <= {USER_WIDTH{1'b0}};
         end else begin
-            if (output_ready_w) begin
+            if (output_accept_w) begin
                 if (skid_tvalid_r) begin
                     m_axis_tdata  <= skid_tdata_r;
                     m_axis_tkeep  <= skid_tkeep_r;
@@ -66,7 +70,7 @@ module axis_registered_stage_template #(
                     m_axis_tlast  <= skid_tlast_r;
                     m_axis_tuser  <= skid_tuser_r;
                     skid_tvalid_r <= 1'b0;
-                end else if (s_axis_fire) begin
+                end else if (input_fire_w) begin
                     m_axis_tdata  <= s_axis_tdata;
                     m_axis_tkeep  <= s_axis_tkeep;
                     m_axis_tvalid <= 1'b1;
@@ -75,15 +79,12 @@ module axis_registered_stage_template #(
                 end else begin
                     m_axis_tvalid <= 1'b0;
                 end
-            end else begin
-                // 输出被阻塞时，输出 payload 必须保持稳定，skid 暂存额外 1 个输入 beat。
-                if (s_axis_fire) begin
-                    skid_tdata_r  <= s_axis_tdata;
-                    skid_tkeep_r  <= s_axis_tkeep;
-                    skid_tvalid_r <= 1'b1;
-                    skid_tlast_r  <= s_axis_tlast;
-                    skid_tuser_r  <= s_axis_tuser;
-                end
+            end else if (input_fire_w) begin
+                skid_tdata_r  <= s_axis_tdata;
+                skid_tkeep_r  <= s_axis_tkeep;
+                skid_tvalid_r <= 1'b1;
+                skid_tlast_r  <= s_axis_tlast;
+                skid_tuser_r  <= s_axis_tuser;
             end
         end
     end
