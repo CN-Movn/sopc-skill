@@ -1,4 +1,4 @@
 interface:
   display_name: "DeepSeek Subagent"
   short_description: "DeepSeek child capability through OpenCode Go"
-  default_prompt: "Use $deepseek-subagent to access DeepSeek children, reusing or resuming an existing scoped assistant before creating a replacement."
+  default_prompt: "Use $deepseek-subagent to access DeepSeek children, keep each child open by default, and close or replace one only when I explicitly decide."

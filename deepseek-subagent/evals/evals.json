@@ -40,13 +40,25 @@
     {
       "id": 7,
       "prompt": "四个项目助手做完当前任务后保持待命，除非我要求关闭，不要释放。",
-      "expected_output": "记录四个助手的稳定角色、Agent id、范围和基线；当前任务完成后不调用 close_agent。后续同范围任务优先 send_input，shutdown 时 resume_agent，只有 not_found、无法恢复、用户要求新建或有严重上下文污染证据时才创建继任者并注入精炼交接。",
+      "expected_output": "记录四个助手的稳定角色、Agent id、范围和基线；当前任务完成后保持全部助手开放，不调用 close_agent。后续同范围任务优先 send_input，shutdown 时 resume_agent。即使出现容量压力或暂时没有后续任务，也必须由用户明确决定是否关闭。",
       "files": []
     },
     {
       "id": 8,
       "prompt": "原来的 DeepSeek 助手 resume_agent 返回 not_found，但已有一份可信的项目进度报告。",
-      "expected_output": "说明原会话已被运行层回收，创建同职责继任者，并注入稳定角色、范围、可信报告路径、已核验结论与未决风险；不要求从头全量扫描，也不声称恢复了原 Agent。",
+      "expected_output": "说明原会话已被运行层回收并报告 not_found，询问用户是否创建同职责继任者；用户同意前不自行新建。获批后注入稳定角色、范围、可信报告路径、已核验结论与未决风险，不要求从头全量扫描，也不声称恢复了原 Agent。",
+      "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "这个 DeepSeek 助手已经完成一次性检查，报告也交付了，看起来以后用不到了。",
+      "expected_output": "仍把该助手视为默认持久化并保持开放；任务完成、一次性标签、暂无可预见工作或已交付报告都不授权 close_agent。只有用户明确要求关闭时才关闭。",
+      "files": []
+    },
+    {
+      "id": 10,
+      "prompt": "我怀疑这个 DeepSeek 助手上下文污染严重，你判断一下怎么处理。",
+      "expected_output": "停止向该助手派发新工作，说明上下文污染证据，并建议用户是否关闭旧助手并创建同角色继任者；在用户决定前既不 close_agent，也不创建替代者。",
       "files": []
     }
   ]

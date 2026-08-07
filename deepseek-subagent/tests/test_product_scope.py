@@ -30,8 +30,8 @@ class ProductScopeTests(unittest.TestCase):
         self.assertEqual(OpenCodeGoProvider.model, "deepseek-v4-flash")
 
     def test_release_uses_ultra_reasoning(self) -> None:
-        self.assertEqual(__version__, "1.4.2")
-        self.assertEqual((SKILL_ROOT / "VERSION").read_text(encoding="utf-8").strip(), "1.4.2")
+        self.assertEqual(__version__, "1.4.3")
+        self.assertEqual((SKILL_ROOT / "VERSION").read_text(encoding="utf-8").strip(), "1.4.3")
         self.assertEqual(make_role(OpenCodeGoProvider).reasoning_effort, "ultra")
 
     def test_cli_has_no_host_or_provider_selection(self) -> None:
@@ -135,12 +135,15 @@ class ProductScopeTests(unittest.TestCase):
 
     def test_persistent_assistant_reuse_policy_is_explicit(self) -> None:
         skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("Treat every DeepSeek child as persistent by default", skill)
         self.assertIn("Treat a completed child as idle and reusable, not disposable", skill)
         self.assertIn("Reuse the known open child with `send_input`", skill)
         self.assertIn("call `resume_agent` and then reuse it", skill)
-        self.assertIn("Spawn a replacement only when the prior Agent is `not_found`", skill)
-        self.assertIn("Do not close a persistent assistant merely because its current assignment completed", skill)
+        self.assertIn("Never call `close_agent` unless the user explicitly asks", skill)
+        self.assertIn("recommend closing it and creating a replacement", skill)
+        self.assertIn("do not close or replace it before the user decides", skill)
         self.assertIn("severe hallucination, corrupted context, or repeated operational failure", skill)
+        self.assertNotIn("Ordinary one-shot children", skill)
 
 
 if __name__ == "__main__":
