@@ -1,4 +1,4 @@
 interface:
   display_name: "DeepSeek Subagent"
-  short_description: "DeepSeek child capability through OpenCode Go"
-  default_prompt: "Use $deepseek-subagent to access DeepSeek children, keep each child open by default, and close or replace one only when I explicitly decide."
+  short_description: "Current-process DeepSeek with durable handoffs"
+  default_prompt: "Use $deepseek-subagent to run a V1 DeepSeek child with a verified project handoff log for every turn."

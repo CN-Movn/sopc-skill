@@ -161,7 +161,9 @@ class ToolContinuationHttpTests(unittest.TestCase):
         replayed_output = next(item for item in captured[1]["input"] if item.get("type") == "function_call_output")
         self.assertEqual(replayed_call["call_id"], replayed_output["call_id"])
         self.assertEqual(json.loads(replayed_call["arguments"]), {"input": "probe"})
-        self.assertEqual(next(item for item in captured[1]["input"] if item.get("type") == "reasoning")["content"][0]["text"], "think")
+        reasoning = next(item for item in captured[1]["input"] if item.get("type") == "reasoning")
+        self.assertEqual(reasoning["content"], [])
+        self.assertEqual(reasoning["summary"], [])
         self.assertIn("DONE", second)
 
     @mock.patch("deepseek_subagent.bridges.opencode_go.server.upstream_call")
@@ -182,7 +184,68 @@ class ToolContinuationHttpTests(unittest.TestCase):
         })
         self.assertEqual(status, 200)
         self.assertEqual([item.get("type") for item in captured[1]["input"] if item.get("type")], ["reasoning", "function_call", "function_call_output"])
+        reasoning = next(item for item in captured[1]["input"] if item.get("type") == "reasoning")
+        self.assertEqual(reasoning["content"], [])
+        self.assertEqual(reasoning["summary"], [])
         self.assertIn("DONE", second)
+
+    @mock.patch("deepseek_subagent.bridges.opencode_go.server.upstream_call")
+    def test_restarted_agent_full_history_normalizes_input_5_reasoning(self, upstream):
+        captured = []
+
+        def fake(_auth, _path, payload, **_kwargs):
+            captured.append(payload)
+            reasoning = payload["input"][5]
+            if reasoning.get("type") == "reasoning" and reasoning.get("content"):
+                return 400, json.dumps(
+                    {
+                        "error": {
+                            "type": "invalid_request_error",
+                            "message": "input[5].content array_above_max_length",
+                        }
+                    }
+                )
+            return 200, _text_response("up_restart", "RESUMED")
+
+        upstream.side_effect = fake
+        call = {
+            "type": "function_call",
+            "call_id": "call_restart",
+            "name": "read_file",
+            "arguments": "{}",
+        }
+        status, response = self._post(
+            {
+                "model": "deepseek-v4-flash",
+                "stream": True,
+                "input": [
+                    {"role": "developer", "content": [{"type": "input_text", "text": "policy"}]},
+                    {"role": "user", "content": [{"type": "input_text", "text": "scope"}]},
+                    {"role": "user", "content": [{"type": "input_text", "text": "task"}]},
+                    {"role": "developer", "content": [{"type": "input_text", "text": "permissions"}]},
+                    {"role": "user", "content": [{"type": "input_text", "text": "environment"}]},
+                    {
+                        "id": "reasoning_restart",
+                        "type": "reasoning",
+                        "summary": [],
+                        "content": [{"type": "reasoning_text", "text": "persisted reasoning"}],
+                        "encrypted_content": None,
+                        "internal_chat_message_metadata_passthrough": {"turn_id": "old_turn"},
+                    },
+                    call,
+                    {"type": "function_call_output", "call_id": "call_restart", "output": "ok"},
+                    {"role": "user", "content": [{"type": "input_text", "text": "wake"}]},
+                ],
+            }
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(len(captured), 1)
+        self.assertEqual(captured[0]["input"][5]["content"], [])
+        self.assertNotIn(
+            "internal_chat_message_metadata_passthrough",
+            captured[0]["input"][5],
+        )
+        self.assertIn("RESUMED", response)
 
 
 if __name__ == "__main__":

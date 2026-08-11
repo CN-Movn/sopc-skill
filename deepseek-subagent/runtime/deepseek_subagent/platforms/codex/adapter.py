@@ -22,6 +22,7 @@ from ...core.tomlutil import toml_unescape
 from . import verify
 from .agents import expected_agent_text
 from .config import (
+    DESKTOP_MULTI_AGENT_V1,
     DESKTOP_MULTI_AGENT_V2,
     LEGACY_PROVIDER_BEGIN,
     LEGACY_PROVIDER_END,
@@ -160,9 +161,14 @@ class CodexAdapter:
                 field_conflicts.append("model_catalog_json")
         v2_field = self._managed_field(manifest, "features.multi_agent_v2", codex_paths)
         if v2_field is not None:
-            text, v2_status = self._restore_v2_field(text, v2_field)
+            text, v2_status = self._restore_feature_bool(text, "multi_agent_v2", v2_field)
             if v2_status == "conflict":
                 field_conflicts.append("features.multi_agent_v2")
+        v1_field = self._managed_field(manifest, "features.multi_agent", codex_paths)
+        if v1_field is not None:
+            text, v1_status = self._restore_feature_bool(text, "multi_agent", v1_field)
+            if v1_status == "conflict":
+                field_conflicts.append("features.multi_agent")
         return text
 
     def _disabled_status(
@@ -308,6 +314,8 @@ class CodexAdapter:
         checks["legacy_role_registration_present"] = bool(agent)
         checks["legacy_role_registration_absent"] = not bool(agent)
         checks["catalog_selected"] = Path(parsed.get("model_catalog_json", "")).expanduser() == codex_paths.catalog
+        checks["desktop_multi_agent"] = (parsed.get("features") or {}).get("multi_agent")
+        checks["desktop_multi_agent_enabled"] = checks["desktop_multi_agent"] is DESKTOP_MULTI_AGENT_V1
         checks["desktop_multi_agent_v2"] = (parsed.get("features") or {}).get("multi_agent_v2")
         checks["desktop_multi_agent_v2_disabled"] = checks["desktop_multi_agent_v2"] is DESKTOP_MULTI_AGENT_V2
         parent_model = configured_parent_model(parsed)
@@ -383,6 +391,7 @@ class CodexAdapter:
             "parent_uses_plaintext_v1",
             "role_model_uses_plaintext_v1",
             "compatibility_mode_ok",
+            "desktop_multi_agent_enabled",
             "desktop_multi_agent_v2_disabled",
             "agent_content_valid",
             "role_checks_valid",
@@ -420,6 +429,7 @@ class CodexAdapter:
             if previous_selection_managed and selected_before
             else parsed.get("model_catalog_json")
         )
+        previous_multi_agent = (parsed.get("features") or {}).get("multi_agent")
         previous_multi_agent_v2 = (parsed.get("features") or {}).get("multi_agent_v2")
         catalog_preexisted = bool(previous_manifest.get("catalog_preexisted", codex_paths.catalog.is_file()))
 
@@ -437,6 +447,7 @@ class CodexAdapter:
             else:
                 new_config = unmanaged_config
             new_config = set_top_level_key(new_config, "model_catalog_json", str(codex_paths.catalog))
+            new_config = set_table_bool(new_config, "features", "multi_agent", True)
             new_config = set_table_bool(new_config, "features", "multi_agent_v2", False)
             parse_toml_text(new_config)
             json.loads(json.dumps(catalog_payload))
@@ -476,7 +487,12 @@ class CodexAdapter:
                         "installed": False,
                         "previous": previous_multi_agent_v2,
                     },
+                    "features.multi_agent": {
+                        "installed": True,
+                        "previous": previous_multi_agent,
+                    },
                 },
+                "managed_multi_agent": True,
                 "managed_multi_agent_v2": True,
                 "config_cleanup_state": "clean",
                 "safe_to_finalize_uninstall": True,
@@ -490,6 +506,8 @@ class CodexAdapter:
                     }
                 },
                 "compatibility_mode": self.compatibility_mode,
+                "allowed_multi_agent_versions": ["v1"],
+                "multi_agent_fallback": False,
                 "adapter_version": self.adapter_version,
                 "installed_at": datetime.now().isoformat(timespec="seconds"),
                 "backup": str(backup),
@@ -576,10 +594,16 @@ class CodexAdapter:
                 updated = remove_marked_block(updated, LEGACY_ROLE_BEGIN, LEGACY_ROLE_END)
                 v2_field = self._managed_field(manifest, "features.multi_agent_v2", codex_paths)
                 if v2_field is not None:
-                    updated, v2_status = self._restore_v2_field(updated, v2_field)
+                    updated, v2_status = self._restore_feature_bool(updated, "multi_agent_v2", v2_field)
                     if v2_status == "conflict":
                         field_conflicts.append("features.multi_agent_v2")
                         warnings.append("features.multi_agent_v2 已被修改，未覆盖；该字段仍残留项目值。")
+                v1_field = self._managed_field(manifest, "features.multi_agent", codex_paths)
+                if v1_field is not None:
+                    updated, v1_status = self._restore_feature_bool(updated, "multi_agent", v1_field)
+                    if v1_status == "conflict":
+                        field_conflicts.append("features.multi_agent")
+                        warnings.append("features.multi_agent 已被修改，未覆盖；该字段仍残留项目值。")
                 if updated != text:
                     parse_toml_text(updated)
                     atomic_write(codex_paths.config, updated.encode())
@@ -618,7 +642,10 @@ class CodexAdapter:
                 elif agent_path.is_file():
                     preserved.append(role)
             changed = bool(config_processed or parent_restored or roles_disabled)
-            multi_agent_restored = "features.multi_agent_v2" not in field_conflicts
+            multi_agent_restored = not {
+                "features.multi_agent",
+                "features.multi_agent_v2",
+            }.intersection(field_conflicts)
 
             updated_manifest = dict(manifest)
 
@@ -685,6 +712,11 @@ class CodexAdapter:
                 "installed": DESKTOP_MULTI_AGENT_V2,
                 "previous": manifest.get("previous_multi_agent_v2"),
             }
+        if name == "features.multi_agent" and manifest.get("managed_multi_agent"):
+            return {
+                "installed": DESKTOP_MULTI_AGENT_V1,
+                "previous": manifest.get("previous_multi_agent"),
+            }
         if name == "model_catalog_json" and manifest.get("managed_catalog_selection"):
             return {
                 "installed": str(codex_paths.catalog),
@@ -693,8 +725,8 @@ class CodexAdapter:
         return None
 
     @staticmethod
-    def _restore_v2_field(text: str, field: dict[str, Any]) -> tuple[str, str]:
-        """features.multi_agent_v2 的 compare-and-swap 恢复。
+    def _restore_feature_bool(text: str, key: str, field: dict[str, Any]) -> tuple[str, str]:
+        """受管 features 布尔字段的 compare-and-swap 恢复。
 
         返回 (text, status)，status ∈ {"restored", "clean", "conflict"}：
         - 当前值 == 项目写入值 → 恢复安装前值（或移除键）；
@@ -704,14 +736,16 @@ class CodexAdapter:
 
         parsed = parse_toml_text(text)
         features = parsed.get("features") or {}
-        if "multi_agent_v2" not in features:
+        if key not in features:
             return text, "clean"
-        current = features["multi_agent_v2"]
+        current = features[key]
         if current == field.get("installed"):
             previous = field.get("previous")
             if isinstance(previous, bool):
-                return set_table_bool(text, "features", "multi_agent_v2", previous), "restored"
-            return remove_table_bool_if_value(text, "features", "multi_agent_v2", False), "restored"
+                return set_table_bool(text, "features", key, previous), "restored"
+            return remove_table_bool_if_value(
+                text, "features", key, bool(field.get("installed"))
+            ), "restored"
         if current == field.get("previous"):
             return text, "clean"
         return text, "conflict"
@@ -866,9 +900,14 @@ class CodexAdapter:
                     text = remove_top_level_key_if_value(text, "model_catalog_json", str(codex_paths.catalog))
                     v2_field = self._managed_field(manifest, "features.multi_agent_v2", codex_paths)
                     if v2_field is not None:
-                        text, v2_status = self._restore_v2_field(text, v2_field)
+                        text, v2_status = self._restore_feature_bool(text, "multi_agent_v2", v2_field)
                         if v2_status == "conflict":
                             field_conflicts.append("features.multi_agent_v2")
+                    v1_field = self._managed_field(manifest, "features.multi_agent", codex_paths)
+                    if v1_field is not None:
+                        text, v1_status = self._restore_feature_bool(text, "multi_agent", v1_field)
+                        if v1_status == "conflict":
+                            field_conflicts.append("features.multi_agent")
                 else:
                     text = self._cleanup_managed_config(text, manifest, codex_paths, field_conflicts)
                 parse_toml_text(text)

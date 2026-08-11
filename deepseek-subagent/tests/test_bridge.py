@@ -187,6 +187,184 @@ class SessionExpansionTests(unittest.TestCase):
         self.assertEqual(json.loads(converted[0]["arguments"]), {"input": "probe"})
         self.assertEqual(converted[0]["call_id"], converted[1]["call_id"])
 
+    def test_resumed_tool_outputs_strip_codex_private_content(self):
+        private = [{"type": "input_text", "text": "private duplicate"}]
+        converted = rt.convert_custom_items_for_upstream(
+            [
+                {
+                    "type": "custom_tool_call_output",
+                    "call_id": "call_custom",
+                    "output": "custom result",
+                    "content": private,
+                    "internal_chat_message_metadata_passthrough": {"turn_id": "private"},
+                },
+                {
+                    "type": "function_call_output",
+                    "call_id": "call_function",
+                    "output": "function result",
+                    "content": private,
+                    "future_codex_private": True,
+                },
+            ],
+            set(),
+        )
+        self.assertEqual(
+            converted,
+            [
+                {
+                    "type": "function_call_output",
+                    "call_id": "call_custom",
+                    "output": "custom result",
+                },
+                {
+                    "type": "function_call_output",
+                    "call_id": "call_function",
+                    "output": "function result",
+                },
+            ],
+        )
+
+    def test_resumed_tool_output_never_guesses_missing_output_from_content(self):
+        with self.assertRaises(rt.TransformError) as raised:
+            rt.convert_custom_items_for_upstream(
+                [
+                    {
+                        "type": "custom_tool_call_output",
+                        "call_id": "call_missing",
+                        "content": [{"type": "input_text", "text": "do not infer"}],
+                    }
+                ],
+                set(),
+            )
+        self.assertIn("缺少 output", str(raised.exception))
+
+    def test_resumed_assistant_output_uses_chat_context_and_reasoning(self):
+        converted = rt.convert_custom_items_for_upstream(
+            [
+                {
+                    "type": "reasoning",
+                    "id": "reasoning_previous",
+                    "summary": [],
+                    "content": [
+                        {"type": "reasoning_text", "text": "prior reasoning"}
+                    ],
+                    "internal_chat_message_metadata_passthrough": {"private": True},
+                },
+                {
+                    "type": "message",
+                    "id": "message_previous",
+                    "role": "assistant",
+                    "status": "completed",
+                    "content": [
+                        {
+                            "type": "output_text",
+                            "text": "prior answer",
+                            "annotations": [],
+                        }
+                    ],
+                    "future_codex_private": True,
+                },
+            ],
+            set(),
+        )
+        self.assertEqual(converted[0]["content"], [])
+        self.assertNotIn("internal_chat_message_metadata_passthrough", converted[0])
+        self.assertEqual(
+            converted[1],
+            {
+                "role": "assistant",
+                "content": "prior answer",
+                "reasoning_content": "prior reasoning",
+            },
+        )
+
+    def test_resumed_native_function_call_strips_private_fields(self):
+        converted = rt.convert_custom_items_for_upstream(
+            [
+                {
+                    "type": "function_call",
+                    "id": "fc_private",
+                    "call_id": "call_native",
+                    "name": "read_file",
+                    "arguments": "{}",
+                    "content": [{"type": "input_text", "text": "invalid private"}],
+                    "future_codex_private": True,
+                }
+            ],
+            set(),
+        )
+        self.assertEqual(
+            converted,
+            [
+                {
+                    "type": "function_call",
+                    "call_id": "call_native",
+                    "name": "read_file",
+                    "arguments": "{}",
+                }
+            ],
+        )
+
+    def test_real_resume_index_three_and_five_are_both_canonical(self):
+        request = rt.build_upstream_request(
+            {
+                "model": "deepseek-v4-flash",
+                "tools": [
+                    {
+                        "type": "custom",
+                        "name": "exec",
+                        "description": "run",
+                        "format": {"type": "text"},
+                    }
+                ],
+                "input": [
+                    {"role": "user", "content": [{"type": "input_text", "text": "task"}]},
+                    {
+                        "type": "reasoning",
+                        "id": "r_tool",
+                        "summary": [],
+                        "content": [{"type": "reasoning_text", "text": "tool reasoning"}],
+                    },
+                    {
+                        "type": "custom_tool_call",
+                        "call_id": "call_exec",
+                        "name": "exec",
+                        "input": "read",
+                    },
+                    {
+                        "type": "custom_tool_call_output",
+                        "call_id": "call_exec",
+                        "output": "tool result",
+                        "content": [{"type": "input_text", "text": "private duplicate"}],
+                    },
+                    {
+                        "type": "reasoning",
+                        "id": "r_final",
+                        "summary": [],
+                        "content": [{"type": "reasoning_text", "text": "final reasoning"}],
+                    },
+                    {
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [{"type": "output_text", "text": "remembered answer"}],
+                    },
+                    {"role": "user", "content": [{"type": "input_text", "text": "verify"}]},
+                ],
+            },
+            [],
+            [],
+        )
+        self.assertEqual(request["input"][3], {
+            "type": "function_call_output",
+            "call_id": "call_exec",
+            "output": "tool result",
+        })
+        self.assertEqual(request["input"][5], {
+            "role": "assistant",
+            "content": "remembered answer",
+            "reasoning_content": "final reasoning",
+        })
+
     def test_previous_response_custom_output_matches_native_session_call(self):
         history = [{"type": "custom_tool_call", "id": "ctc1", "call_id": "call_exec", "name": "exec", "input": "probe"}]
         accepted = rt.validate_and_dedupe_outputs(
@@ -542,6 +720,7 @@ class CodexInstallTests(unittest.TestCase):
         self.assertEqual(by_slug["gpt-5.6-sol"]["multi_agent_version"], "v2")
         self.assertEqual(by_slug["deepseek-v4-flash"]["slug"], "deepseek-v4-flash")
         self.assertEqual(by_slug["deepseek-v4-flash"]["display_name"], "DeepSeek V4 Flash")
+        self.assertEqual(by_slug["deepseek-v4-flash"]["multi_agent_version"], "v1")
         self.assertIn("gpt-other", by_slug)
 
     def test_codex_catalog_missing_template_errors(self):
@@ -579,6 +758,7 @@ class CodexInstallTests(unittest.TestCase):
             self.assertIn('base_url = "http://127.0.0.1:1981/v1"', config_text)
             self.assertIn('wire_api = "responses"', config_text)
             self.assertIn("model_catalog_json", config_text)
+            self.assertIn("multi_agent = true", config_text)
             self.assertIn("multi_agent_v2 = false", config_text)
             self.assertIn("js_repl = false", config_text)
             self.assertEqual(config_text.count('model = "gpt-5.6-sol"'), 1)
@@ -591,12 +771,15 @@ class CodexInstallTests(unittest.TestCase):
             self.assertNotIn("experimental", manifest)
             self.assertEqual(manifest["provider"], "opencode-go")
             self.assertEqual(manifest["bridge_auth"], codex_auth)
+            self.assertEqual(manifest["allowed_multi_agent_versions"], ["v1"])
+            self.assertFalse(manifest["multi_agent_fallback"])
             # status 必须满足 cross-provider-v1 兼容契约。
             status = adapter.status(state, object(), role, OpenCodeGoProvider, str(codex_home))
             self.assertEqual(status["status"], "configured")
             self.assertTrue(status["checks"]["provider_valid"])
             self.assertTrue(status["checks"]["parent_uses_plaintext_v1"])
             self.assertTrue(status["checks"]["role_model_uses_plaintext_v1"])
+            self.assertTrue(status["checks"]["desktop_multi_agent_enabled"])
             # uninstall 恢复（字节级）
             result = adapter.uninstall(state, object(), remove_credential=False, platform_home=str(codex_home))
             self.assertEqual(result["status"], "uninstalled")
@@ -856,6 +1039,35 @@ class AgentMessageTests(unittest.TestCase):
         self.assertNotIn("encrypted_content", json.dumps(req))
         self.assertTrue(notes)
 
+    def test_restart_replay_normalizes_reasoning_for_upstream(self):
+        request = rt.build_upstream_request(
+            {
+                "model": "deepseek-v4-flash",
+                "input": [
+                    {
+                        "id": "reasoning_restart",
+                        "type": "reasoning",
+                        "summary": [],
+                        "content": [{"type": "reasoning_text", "text": "private replay text"}],
+                        "encrypted_content": None,
+                        "internal_chat_message_metadata_passthrough": {"turn_id": "turn_restart"},
+                        "future_codex_private": "must-not-replay",
+                    },
+                    {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "wake"}]},
+                ],
+            },
+            [],
+            [],
+        )
+        reasoning = request["input"][0]
+        self.assertEqual(reasoning["type"], "reasoning")
+        self.assertEqual(reasoning["content"], [])
+        self.assertEqual(reasoning["summary"], [])
+        self.assertIsNone(reasoning["encrypted_content"])
+        self.assertNotIn("internal_chat_message_metadata_passthrough", reasoning)
+        self.assertNotIn("future_codex_private", reasoning)
+        self.assertEqual(request["input"][-1]["role"], "user")
+
     def test_session_isolation_across_requests(self):
         """子 Agent 各自 previous_response_id 只关联自己的历史。"""
 
@@ -878,7 +1090,9 @@ class AgentMessageTests(unittest.TestCase):
 
         with self.assertRaises(rt.TransformError) as cm:
             rt.normalize_agent_message(self._v2_envelope(""), [])
-        self.assertIn("加密", str(cm.exception))
+        self.assertEqual(cm.exception.code, "current_task_multi_agent_v2")
+        self.assertIn("Multi-Agent V2", str(cm.exception))
+        self.assertIn("V1", str(cm.exception))
 
     def test_v2_envelope_with_plaintext_payload_converts(self):
         """明文任务正文（信封后 >40 字符）+ 加密并存（R16 探测形态）→ 正常转换。"""

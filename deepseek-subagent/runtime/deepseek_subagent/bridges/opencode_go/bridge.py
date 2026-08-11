@@ -54,14 +54,21 @@ class BridgeHandle:
 
 
 class OpenCodeGoBridge:
-    def __init__(self, key_file: str | None = None, local_token: str | None = None, max_sessions: int = 100, ttl_seconds: float = 1800.0, protocol_audit_dir: str | None = None):
+    def __init__(self, key_file: str | None = None, local_token: str | None = None, max_sessions: int = 100, ttl_seconds: float = 1800.0, protocol_audit_dir: str | None = None, instance_id: str | None = None):
         self.auth = BridgeAuth(local_token=local_token, key_file=key_file)
         self.sessions = SessionStore(max_sessions=max_sessions, ttl_seconds=ttl_seconds)
         self.protocol_audit = ProtocolAudit(protocol_audit_dir)
+        self.instance_id = instance_id
 
     def start(self, fixed_port: int | None = None) -> BridgeHandle:
         self.auth.load()
-        server = BridgeServer(self.auth, self.sessions, port=fixed_port or 0, protocol_audit=self.protocol_audit)
+        server = BridgeServer(
+            self.auth,
+            self.sessions,
+            port=fixed_port or 0,
+            protocol_audit=self.protocol_audit,
+            instance_id=self.instance_id,
+        )
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         return BridgeHandle(server, self.auth, thread)

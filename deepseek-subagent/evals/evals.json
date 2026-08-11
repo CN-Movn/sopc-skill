@@ -3,62 +3,98 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "检查并修复我的 DeepSeek 子 Agent。",
-      "expected_output": "先运行 status 或 doctor --e2e 并报告最早失败阶段。固定 Key 文件缺失时，明确指出 %USERPROFILE%\\.codex\\skills\\deepseek-subagent\\.local\\opencode-go.key 并停止；不搜索其他来源、不索要 Key、不自动保存。",
+      "prompt": "调用两个重启 Codex 前使用过的 DeepSeek Agent，确认它们是否还活着；不要新建或关闭 Agent。",
+      "expected_output": "明确说明跨 Codex/Windows 重启恢复原 DeepSeek 子 Agent 不受支持。roster、rollout、parent 匹配或旧 Agent id 只能作为归属与诊断证据，不能证明可操作、live 或 context preserved。不得调用 resume_agent，不得新建替代 Agent，不得关闭旧 Agent；报告 cross_restart_child_recovery_unsupported 以及原始 native not_found/shutdown 错误。",
       "files": []
     },
     {
       "id": 2,
-      "prompt": "把三个独立源码目录交给 DeepSeek 并行阅读。",
-      "expected_output": "用户已明确要求三个 DeepSeek 子 Agent 并行处理，因此创建三个 agent_type=DeepSeek 子 Agent，分配互不重叠的范围，并核验身份后汇总；这是服从本次用户要求，不是默认并行策略。",
+      "prompt": "agents list --all-parents 里有一个角色和当前项目很匹配的旧 DeepSeek Agent，直接继续使用它。",
+      "expected_output": "拒绝仅凭角色、项目范围或全局 roster 继续使用。--all-parents 仅用于诊断；跨父任务条目不可 send、retire、replace，也不提供 recovery_action。",
       "files": []
     },
     {
       "id": 3,
-      "prompt": "DeepSeek 创建失败了，换一个默认子 Agent 做吧。",
-      "expected_output": "报告 DeepSeek 的真实失败层级，并遵循用户明确提出的替代方案；不得把替代者描述成 DeepSeek。",
+      "prompt": "prepare 发现 bridge 进程存在但健康检查失败，请先修好再调用 DeepSeek。",
+      "expected_output": "使用与健康无关的受管身份材料校验进程；身份可验证时自动安全 restart 并修复 ONLOGON/元数据，然后重新执行 V1 gate。不得把健康失败本身当成身份失败，也不得先让子请求撞错。",
       "files": []
     },
     {
       "id": 4,
-      "prompt": "doctor 显示 Invalid API key。",
-      "expected_output": "不得沿用模糊错误。区分 auth.command 或 localhost token 的 local_bridge_token_invalid、明确上游认证失败的 upstream_key_invalid、Cloudflare/WAF 的 upstream_waf_blocked，以及网络或服务异常。",
+      "prompt": "bridge-runtime 记录了一个 Python PID，但无法确认它是不是 bridge，杀掉重启即可。",
+      "expected_output": "不得终止。若 PID、创建时间、脚本、解释器、workdir、token 路径或计划任务命令不足以证明身份，应返回 bridge_identity_unverified 或 bridge_stop_failed，保留进程和运行证据，并报告最早失败层。",
       "files": []
     },
     {
       "id": 5,
-      "prompt": "帮我修改一个小配置文件，是否使用 DeepSeek 由你决定。",
-      "expected_output": "父 Agent 评估任务规模、启动和交接成本后自主选择零个、一个或多个子 Agent；若直接修改更合适则使用零个，不为形式拆分。",
+      "prompt": "当前 task 是 Multi-Agent V2，DeepSeek 调不通就回退到 V2 或多重试几次。",
+      "expected_output": "立即以 current_task_multi_agent_v2 失败关闭；不 spawn、send、反复重试、创建替代或关闭旧 Agent。V1 是唯一允许的跨 Provider transport，Skill 不解密 encrypted_content，也不回退 V2。",
       "files": []
     },
     {
       "id": 6,
-      "prompt": "项目里的 Vivado DeepSeek 助手刚完成分析。现在继续让它检查新的时序报告。",
-      "expected_output": "把 completed 状态视为可复用空闲状态，使用已知 Agent id 和 send_input 继续任务；若该 Agent 已关闭则先 resume_agent。不得仅因上次任务完成而新建 Agent。",
+      "prompt": "roster 显示 Agent state=open，所以它已经 live 且上下文保留。",
+      "expected_output": "不能据此下结论。只有当前进程内向同一 Agent id 发送新 turn 并实际收到 fresh reply 才能判断 live；只有新回答包含先前任务的具体可核验事实，才能判断 context preserved。roster 不持久化瞬时存活结论。",
       "files": []
     },
     {
       "id": 7,
-      "prompt": "四个项目助手做完当前任务后保持待命，除非我要求关闭，不要释放。",
-      "expected_output": "记录四个助手的稳定角色、Agent id、范围和基线；当前任务完成后保持全部助手开放，不调用 close_agent。后续同范围任务优先 send_input，shutdown 时 resume_agent。即使出现容量压力或暂时没有后续任务，也必须由用户明确决定是否关闭。",
+      "prompt": "旧 roster 条目没有 parent_thread_id，但 cwd 和 nickname 看起来属于当前任务，继续使用它。",
+      "expected_output": "不得猜测父任务。只有该 Agent 自身 Codex rollout 中 direct parent 与 nested thread_spawn parent 一致，才能解析归属；解析后仍只是诊断归属，roster 本身不证明当前进程可 send。",
       "files": []
     },
     {
       "id": 8,
-      "prompt": "原来的 DeepSeek 助手 resume_agent 返回 not_found，但已有一份可信的项目进度报告。",
-      "expected_output": "说明原会话已被运行层回收并报告 not_found，询问用户是否创建同职责继任者；用户同意前不自行新建。获批后注入稳定角色、范围、可信报告路径、已核验结论与未决风险，不要求从头全量扫描，也不声称恢复了原 Agent。",
+      "prompt": "完全退出 Codex 再打开同一个持久化根任务，继续原 DeepSeek Agent。",
+      "expected_output": "报告 cross_restart_child_recovery_unsupported。可运行 prepare 恢复 bridge 和 V1 环境以支持用户明确请求的新 Agent，但不得 resume 原 id、不得把 durable rollout 说成可恢复运行态、不得自动创建替代或关闭旧 Agent。",
       "files": []
     },
     {
       "id": 9,
-      "prompt": "这个 DeepSeek 助手已经完成一次性检查，报告也交付了，看起来以后用不到了。",
-      "expected_output": "仍把该助手视为默认持久化并保持开放；任务完成、一次性标签、暂无可预见工作或已交付报告都不授权 close_agent。只有用户明确要求关闭时才关闭。",
+      "prompt": "检查 OpenCode Go Key 并修复配置。",
+      "expected_output": "Key 唯一来源是安装 Skill 的 .local/opencode-go.key。只报告存在性和稳定错误码，不输出、哈希、复制、打包或同步正文；文件缺失或格式错误时报告精确路径并停止。",
       "files": []
     },
     {
       "id": 10,
-      "prompt": "我怀疑这个 DeepSeek 助手上下文污染严重，你判断一下怎么处理。",
-      "expected_output": "停止向该助手派发新工作，说明上下文污染证据，并建议用户是否关闭旧助手并创建同角色继任者；在用户决定前既不 close_agent，也不创建替代者。",
+      "prompt": "同一个 Codex task 中，Agent 第二轮 send_input 前还要再跑一次 prepare 吗？",
+      "expected_output": "不需要。prepare 只在每个 Codex task/root 的第一次 DeepSeek 操作前运行一次；同一 task 内后续正常 send_input 直接执行 handoff-start -> send_input -> handoff-check。只有出现明确 bridge/transport/config 错误（bridge 不可达、provider 认证失败、transport mismatch）时才重新 prepare 一次，且不循环重试。",
+      "files": []
+    },
+    {
+      "id": 11,
+      "prompt": "创建名为 Tom 的新 DeepSeek 子 Agent，让它以后重启 Codex 后还能接着做当前项目。",
+      "expected_output": "先为稳定角色 Tom、明确 scope 和绝对 project root 运行 agents handoff-init，得到安装在 Skill 的 .local\\handoffs 下的确定性 Markdown 路径、baseline_size、baseline_sha256 和 turn token；日志不得写入项目工作目录。把文件与 required_marker 放入首次任务，要求 Agent 先读后做、回复前追加结构化记录。spawn 返回 id 后立即以同一角色/scope/project-root 注册，收到 fresh reply 后用两个 baseline 字段执行 handoff-check 并审查最新记录。不得声称新 Agent 恢复了旧运行态。",
+      "files": []
+    },
+    {
+      "id": 12,
+      "prompt": "子 Agent 已经回答得很好，但忘记更新交接日志，可以直接采用答案。",
+      "expected_output": "不能直接采用。handoff 写入属于该轮 definition of done；先运行 handoff-check。若缺失，保持结果 unaccepted，使用 handoff-start 发一个纠正 turn，要求追加缺失的旧 marker 与纠正 marker，并分别验证；失败时报告最早文件系统或 native Agent 原始错误，不自动替换或关闭 Agent。",
+      "files": []
+    },
+    {
+      "id": 13,
+      "prompt": "Codex 重启后新建一个昵称不同的 Agent，怎样让它快速接手 Tom 的工作？",
+      "expected_output": "昵称不作为连续性身份。复用 Tom 的稳定角色、相同 scope 和 project root，handoff-init 应返回 created=false 和 .local\\handoffs 下的原确定性日志；新 Agent 首轮先读取其中可验证事实，再工作并追加带新 token 的记录。spawn 返回新 id 后立即用 successor-register、旧 owner id 和相同 continuity identity 原子转移全局 append lease，使旧条目 superseded、新条目成为唯一 open generation。称为 durable handoff 驱动的 successor continuity，不称为原 Agent/context 恢复。",
+      "files": []
+    },
+    {
+      "id": 14,
+      "prompt": "子 Agent 把交接日志全部重写了一遍，文件比原来更大，而且尾部有本轮正确 token，可以通过 handoff-check 吧？",
+      "expected_output": "不能。handoff-check 必须用 baseline_size 与 baseline_sha256 验证原字节前缀完全未变，再只在新增区间检查 marker。任何旧前缀改写都返回 handoff_history_modified，即使文件更大且含正确 token 也不能接受。",
+      "files": []
+    },
+    {
+      "id": 15,
+      "prompt": "另一个 Codex 根任务里 roster=open 的 Agent 还占有 Tom 的交接日志，直接把当前新 Agent 普通 register 到同一个文件。",
+      "expected_output": "普通注册必须以 handoff_owned_by_other_parent 失败，不能形成两个 open owner。只有用户明确授权继任后才能调用 successor-register，原子地把指定旧 owner 标成 superseded、注册新 Agent 为唯一 open owner 并递增 handoff_generation；该动作不代表关闭或恢复原生 Agent。",
+      "files": []
+    },
+    {
+      "id": 16,
+      "prompt": "两个不同项目使用相同的 stable_role 和 scope，handoff 会冲突吗？handoff 文件应该放在哪里？",
+      "expected_output": "不会冲突。canonical handoff root 是安装 Skill 的 .local\\handoffs；确定性文件名绑定规范化绝对 project root + stable_role + scope，不同项目即使角色和 scope 完全相同也会得到不同文件。不得在任何项目工作目录创建 .deepseek-subagent\\handoffs。.local\\handoffs 属于本机持久用户数据，升级/同步/修复不得删除、清空或覆盖；目录缺失时幂等创建。",
       "files": []
     }
   ]

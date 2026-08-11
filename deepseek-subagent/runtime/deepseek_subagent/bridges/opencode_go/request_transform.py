@@ -17,7 +17,9 @@ from typing import Any
 
 
 class TransformError(ValueError):
-    pass
+    def __init__(self, message: str, code: str = "transform_error") -> None:
+        super().__init__(message)
+        self.code = code
 
 
 _TEXT_CONTENT_TYPES = ("input_text", "text", "output_text")
@@ -92,8 +94,11 @@ def normalize_agent_message(item: dict[str, Any], notes: list[str]) -> dict[str,
         raise TransformError("agent_message 没有任何可用的任务正文")
     if _is_empty_v2_envelope(segments, content):
         raise TransformError(
-            "agent_message 任务正文被 Codex v2 加密（明文仅含 NEW_TASK 信封，"
-            "任务负载在 encrypted_content 中）；桥无解密密钥，无法转换"
+            "当前任务错误地使用了 Multi-Agent V2：agent_message 的任务负载仅存在于 "
+            "encrypted_content 中。DeepSeek cross-provider 只允许 V1；桥不会解密或猜测 V2 "
+            "负载。请让 V1 配置生效后创建新的 Codex task；如需继续工作，只能在用户明确授权后"
+            "创建继任 Agent，并从项目交接日志接续。",
+            code="current_task_multi_agent_v2",
         )
     if item.get("author") is not None:
         notes.append(f"agent_message author 控制字段未进入正文（author={item.get('author')!r}）")
@@ -270,17 +275,98 @@ def custom_tool_names(tools: list[dict[str, Any]]) -> set[str]:
     }
 
 
+def _content_text(content: Any, *, context: str) -> str:
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        raise TransformError(f"{context} content 必须是字符串或数组")
+    segments: list[str] = []
+    for part in content:
+        if not isinstance(part, dict):
+            raise TransformError(f"{context} content 项必须是对象")
+        part_type = part.get("type")
+        if part_type in _TEXT_CONTENT_TYPES:
+            text = part.get("text")
+        elif part_type == "reasoning_text":
+            text = part.get("text")
+        elif part_type == "refusal":
+            text = part.get("refusal")
+        else:
+            raise TransformError(f"{context} 无法安全重放 content 类型：{part_type!r}")
+        if not isinstance(text, str):
+            raise TransformError(f"{context} content 项 {part_type!r} 缺少文本")
+        segments.append(text)
+    return "\n".join(segments)
+
+
+def _assistant_message_for_upstream(
+    item: dict[str, Any], reasoning_content: str | None
+) -> dict[str, Any]:
+    """Convert a persisted Responses output message to chat-style context."""
+
+    text = _content_text(item.get("content"), context="assistant message")
+    explicit_reasoning = item.get("reasoning_content")
+    if explicit_reasoning is not None and not isinstance(explicit_reasoning, str):
+        raise TransformError("assistant message reasoning_content 必须是字符串或 null")
+    return {
+        "role": "assistant",
+        "content": text,
+        "reasoning_content": explicit_reasoning
+        if explicit_reasoning is not None
+        else reasoning_content,
+    }
+
+
 def convert_custom_items_for_upstream(
     items: list[dict[str, Any]], names: set[str]
 ) -> list[dict[str, Any]]:
     """Convert Codex custom call history to the upstream function form."""
 
     converted: list[dict[str, Any]] = []
+    pending_reasoning_content: str | None = None
     for item in items:
         if not isinstance(item, dict):
             raise TransformError("输入 item 必须是对象")
         item_type = item.get("type")
         name = str(item.get("name") or "")
+        if item_type == "reasoning":
+            # Codex persists visible reasoning_text in ``content``.  The
+            # OpenCode Go Responses shim accepts replayed reasoning metadata
+            # but requires this array to be empty.  Normalize only at the
+            # upstream boundary so the local Codex transcript stays intact.
+            normalized = {
+                key: item[key]
+                for key in ("type", "id", "summary", "encrypted_content", "status")
+                if key in item
+            }
+            normalized["content"] = []
+            converted.append(normalized)
+            content = item.get("content")
+            pending_reasoning_content = (
+                _content_text(content, context="reasoning item") if content else None
+            )
+            continue
+        if item_type == "message" and item.get("role") == "assistant":
+            converted.append(
+                _assistant_message_for_upstream(item, pending_reasoning_content)
+            )
+            pending_reasoning_content = None
+            continue
+        if item_type == "function_call":
+            call_id = item.get("call_id")
+            name = item.get("name")
+            arguments = item.get("arguments")
+            if not call_id or not name or not isinstance(arguments, str):
+                raise TransformError("function_call 缺少 call_id、name 或字符串 arguments")
+            converted.append(
+                {
+                    "type": "function_call",
+                    "call_id": call_id,
+                    "name": name,
+                    "arguments": arguments,
+                }
+            )
+            continue
         if item_type == "custom_tool_call" and name in names:
             raw_input = item.get("input")
             if not isinstance(raw_input, str):
@@ -294,8 +380,26 @@ def convert_custom_items_for_upstream(
                 "arguments": json.dumps({"input": raw_input}, ensure_ascii=False),
             })
             continue
-        if item_type == "custom_tool_call_output":
-            converted.append({**item, "type": "function_call_output"})
+        if item_type in _OUTPUT_TYPES:
+            call_id = item.get("call_id")
+            if not call_id:
+                raise TransformError(f"{item_type} 缺少 call_id")
+            if "output" not in item:
+                raise TransformError(
+                    f"{item_type} 缺少 output；不会从 Codex 私有 content 字段猜测工具结果"
+                )
+            # Codex-persisted output items may carry private ``content`` and
+            # control metadata.  OpenCode Go's Responses schema accepts the
+            # canonical call_id/output form; forwarding the private content
+            # array produces ArrayParam/content validation failures on a
+            # resumed full-history replay.
+            converted.append(
+                {
+                    "type": "function_call_output",
+                    "call_id": call_id,
+                    "output": item["output"],
+                }
+            )
             continue
         converted.append(item)
     return converted

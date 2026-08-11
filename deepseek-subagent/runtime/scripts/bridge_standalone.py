@@ -1,17 +1,5 @@
 #!/usr/bin/env python3
-"""本地兼容桥独立进程（受控验收用）。
-
-用法：
-    python bridge_standalone.py --workdir <dir>
-
-行为：
-- 仅监听 127.0.0.1 随机端口；
-- OpenCode Go API Key 只存在于本进程内存；
-- 使用 Skill .local/local-bridge-token.txt 中的稳定本地令牌，bridge 与
-  Codex auth.command 读取同一个文件；
-- 写 <workdir>/bridge.json：{port, pid, token_file, token_script}；
-- 前台运行；Ctrl+C 或 kill <pid> 停止（进程退出即清理内存凭据）。
-"""
+"""Run the managed localhost OpenCode Go compatibility bridge."""
 
 from __future__ import annotations
 
@@ -20,11 +8,18 @@ import json
 import os
 import sys
 import time
+import uuid
 from pathlib import Path
 
+# A managed bridge runs directly from the installed Skill tree.  Keep that
+# release tree immutable at runtime even if an older Task Scheduler command
+# omitted Python's ``-B`` switch.
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from deepseek_subagent.bridges.opencode_go.bridge import OpenCodeGoBridge  # noqa: E402
+from deepseek_subagent.bridges.opencode_go.control import BRIDGE_ABI_VERSION  # noqa: E402
+from deepseek_subagent.bridges.opencode_go.lifecycle import process_creation_time  # noqa: E402
 from deepseek_subagent.bridges.opencode_go.token_store import TOKEN_FILE, ensure_token  # noqa: E402
 
 
@@ -35,8 +30,8 @@ def main() -> int:
     parser.add_argument("--pid-file", default=None)
     args = parser.parse_args()
 
-    # pythonw.exe（后台无窗口模式）下 stdout/stderr 为 None，print 会崩溃；
-    # 重定向到 devnull 保持进程稳定。
+    # pythonw.exe has no console streams. Redirect them so incidental logging
+    # cannot crash the managed background process.
     if sys.stdout is None:
         sys.stdout = open(os.devnull, "w", encoding="utf-8")
     if sys.stderr is None:
@@ -44,7 +39,6 @@ def main() -> int:
 
     workdir = Path(args.workdir).expanduser().resolve()
     workdir.mkdir(parents=True, exist_ok=True)
-
     pid_file = (
         Path(args.pid_file).expanduser().resolve()
         if args.pid_file
@@ -62,29 +56,46 @@ def main() -> int:
 
     skill_root = Path(__file__).resolve().parents[2]
     token_dir = skill_root / ".local"
-    key_file = skill_root / ".local" / "opencode-go.key"
+    key_file = token_dir / "opencode-go.key"
     token_script = skill_root / "runtime" / "scripts" / "print_bridge_token.py"
     token, token_state = ensure_token(token_dir, legacy_workdir=workdir)
     codex_token_file = token_dir / TOKEN_FILE
-    bridge = OpenCodeGoBridge(key_file=str(key_file), local_token=token, protocol_audit_dir=str(workdir))
+    bridge_instance_id = str(uuid.uuid4())
+    bridge = OpenCodeGoBridge(
+        key_file=str(key_file),
+        local_token=token,
+        protocol_audit_dir=str(workdir),
+        instance_id=bridge_instance_id,
+    )
     handle = bridge.start(fixed_port=args.port or None)
 
+    pid = os.getpid()
     info = {
         "port": handle.port,
         "base_url": handle.base_url,
-        "pid": os.getpid(),
-        "token_file": str(codex_token_file),
-        "token_script": str(token_script),
+        "pid": pid,
+        "workdir": str(workdir),
+        "pythonw": str(Path(sys.executable).resolve()),
+        "script": str(Path(__file__).resolve()),
+        "bridge_instance_id": bridge_instance_id,
+        "bridge_abi_version": BRIDGE_ABI_VERSION,
+        "launch_mode": "on_demand",
+        "process_creation_time": process_creation_time(pid),
+        "token_file": str(codex_token_file.resolve()),
+        "token_script": str(token_script.resolve()),
         "token_version": token_state["token_version"],
         "token_generation": token_state["token_generation"],
         "token_fingerprint": token_state["token_fingerprint"],
     }
-    (workdir / "bridge.json").write_text(json.dumps(info, indent=2), encoding="utf-8")
-    print(json.dumps(info))
-    print(f"bridge ready: {handle.base_url} (pid {os.getpid()}) — Ctrl+C 停止", flush=True)
+    (workdir / "bridge.json").write_text(
+        json.dumps(info, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(json.dumps(info, ensure_ascii=False))
+    print(f"bridge ready: {handle.base_url} (pid {pid}) - Ctrl+C to stop", flush=True)
     try:
-        while True:
-            time.sleep(3600)
+        while not handle.server.shutdown_requested.wait(3600):
+            pass
     except KeyboardInterrupt:
         pass
     finally:

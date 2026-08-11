@@ -34,6 +34,7 @@ class CodexLifecycleTests(unittest.TestCase):
             '# unrelated user comment\n'
             '[features]\n'
             'js_repl = false\n'
+            'multi_agent = false\n'
             'multi_agent_v2 = true\n'
         )
         self.paths.config.write_text(self.original, encoding="utf-8", newline="\n")
@@ -144,6 +145,16 @@ class CodexLifecycleTests(unittest.TestCase):
         self.assertFalse(self.paths.catalog.exists())
         self.assertFalse(self.paths.agent.exists())
         self.assertFalse(self.state.manifest.exists())
+
+    def test_v1_feature_drift_is_not_overwritten(self) -> None:
+        self.install()
+        text = self.paths.config.read_text(encoding="utf-8").replace(
+            "multi_agent = true", 'multi_agent = "custom"'
+        )
+        self.paths.config.write_text(text, encoding="utf-8", newline="\n")
+        result = self.adapter.disable(self.state, object(), str(self.codex_home))
+        self.assertIn("features.multi_agent", result["field_conflicts"])
+        self.assertIn('multi_agent = "custom"', self.paths.config.read_text(encoding="utf-8"))
 
     def test_platform_mismatch_is_rejected_without_file_changes(self) -> None:
         self.install()

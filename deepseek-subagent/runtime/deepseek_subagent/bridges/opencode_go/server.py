@@ -20,6 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 from .auth import BridgeAuth
+from .control import BRIDGE_ABI_VERSION, SHUTDOWN_PATH
 from .models import upstream_to_codex_models
 from .request_transform import (
     TransformError,
@@ -120,7 +121,14 @@ class BridgeHandler(BaseHTTPRequestHandler):
         if not self._check_auth():
             return
         if self.path == "/health":
-            self._respond_json(200, {"status": "ok"})
+            self._respond_json(
+                200,
+                {
+                    "status": "ok",
+                    "bridge_abi_version": BRIDGE_ABI_VERSION,
+                    "bridge_instance_id": self.server.instance_id,
+                },
+            )
             return
         start = time.monotonic()
         try:
@@ -138,6 +146,37 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self._log("models", f"error status=502")
 
     def do_POST(self):
+        if self.path == SHUTDOWN_PATH:
+            if not self._check_auth():
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length <= 0 or length > 4096:
+                    raise ValueError("invalid control payload length")
+                payload = json.loads(self.rfile.read(length).decode("utf-8", "strict"))
+            except (UnicodeError, ValueError, json.JSONDecodeError):
+                self._respond_json(
+                    400,
+                    {"error": {"type": "invalid_request_error", "code": "bridge_control_invalid", "message": "Invalid bridge control request."}},
+                )
+                return
+            if not self.server.instance_id or payload.get("bridge_instance_id") != self.server.instance_id:
+                self._respond_json(
+                    409,
+                    {"error": {"type": "invalid_request_error", "code": "bridge_instance_mismatch", "message": "Bridge instance identity did not match."}},
+                )
+                return
+            self._respond_json(
+                202,
+                {
+                    "status": "shutdown_accepted",
+                    "bridge_instance_id": self.server.instance_id,
+                    "bridge_abi_version": BRIDGE_ABI_VERSION,
+                },
+            )
+            self._log("control", "shutdown accepted")
+            self.server.shutdown_requested.set()
+            return
         if self.path != "/v1/responses":
             self._respond_json(404, {"error": {"type": "invalid_request_error", "code": "not_found", "message": "unknown path"}})
             return
@@ -220,8 +259,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self.server.update_session(local_id, prev, codex_request, history, raw, effective_input, bridged_custom_names)
             self._log("responses", f"status={status} stream={stream} latency={time.monotonic()-start:.2f}s local_id={local_id}")
         except TransformError as exc:
-            self._respond_json(400, {"error": {"type": "invalid_request_error", "code": "transform_error", "message": self.server.auth.redact(str(exc))}})
-            self._log("responses", f"transform_error latency={time.monotonic()-start:.2f}s")
+            self._respond_json(400, {"error": {"type": "invalid_request_error", "code": exc.code, "message": self.server.auth.redact(str(exc))}})
+            self._log("responses", f"{exc.code} latency={time.monotonic()-start:.2f}s")
         except UpstreamError as exc:
             self._respond_upstream_error(exc)
             self._log("responses", f"upstream_error code={exc.code} status={exc.status} latency={time.monotonic()-start:.2f}s")
@@ -234,12 +273,14 @@ class BridgeHandler(BaseHTTPRequestHandler):
 class BridgeServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, auth: BridgeAuth, sessions: SessionStore, port: int = 0, protocol_audit: ProtocolAudit | None = None):
+    def __init__(self, auth: BridgeAuth, sessions: SessionStore, port: int = 0, protocol_audit: ProtocolAudit | None = None, instance_id: str | None = None):
         super().__init__(("127.0.0.1", port), BridgeHandler)
         self.auth = auth
         self.sessions = sessions
         self.audit_lines: list[str] = []
         self.protocol_audit = protocol_audit or ProtocolAudit()
+        self.instance_id = instance_id
+        self.shutdown_requested = threading.Event()
 
     def audit(self, kind: str, detail: str) -> None:
         self.audit_lines.append(f"[{kind}] {detail}")

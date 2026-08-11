@@ -37,6 +37,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--state-home")
     parser.add_argument("--codex-home")
     parser.add_argument("--bridge-json", help=argparse.SUPPRESS)
+    parser.add_argument("--parent-model", action="append", default=[], help=argparse.SUPPRESS)
     parser.add_argument("--workdir")
     parser.add_argument("--port", type=int, default=1981)
     parser.add_argument("--auto-start", action="store_true")
@@ -93,7 +94,7 @@ def read_codex_models_cache(cache_path: str | None = None) -> dict:
 
 
 def build_codex_catalog(models_cache: dict, model: str) -> dict:
-    """保留 Codex 缓存条目，并为固定 DeepSeek 模型生成本地条目。"""
+    """保留 Codex 缓存条目，并生成固定为 Multi-Agent V1 的 DeepSeek 条目。"""
 
     models = [dict(item) for item in models_cache.get("models", []) if isinstance(item, dict)]
     template = next((m for m in models if m.get("slug") == "gpt-5.6-sol"), None)
@@ -104,6 +105,7 @@ def build_codex_catalog(models_cache: dict, model: str) -> dict:
     entry = dict(template)
     entry["slug"] = model
     entry["display_name"] = "DeepSeek V4 Flash"
+    entry["multi_agent_version"] = "v1"
     for index, item in enumerate(models):
         if item.get("slug") == model:
             models[index] = entry
@@ -113,7 +115,13 @@ def build_codex_catalog(models_cache: dict, model: str) -> dict:
     return {"models": models}
 
 
-def _codex_setup(state, codex_home: str | None, bridge_json: str, operation: str) -> dict[str, Any]:
+def _codex_setup(
+    state,
+    codex_home: str | None,
+    bridge_json: str,
+    operation: str,
+    parent_models: Sequence[str] = (),
+) -> dict[str, Any]:
     bridge_path = Path(bridge_json)
     if not bridge_path.is_file():
         raise ManagerError("bridge_json_missing", f"桥信息文件不存在：{bridge_path}")
@@ -142,8 +150,9 @@ def _codex_setup(state, codex_home: str | None, bridge_json: str, operation: str
             parent_model = parse_toml_text(codex_paths.config.read_text(encoding="utf-8")).get("model")
         except ManagerError:
             parent_model = None
+    managed_parent_models = {item for item in (parent_model, *parent_models) if item}
     for item in catalog_payload.get("models", []):
-        if item.get("slug") in {OpenCodeGoProvider.model, parent_model}:
+        if item.get("slug") == OpenCodeGoProvider.model or item.get("slug") in managed_parent_models:
             item["multi_agent_version"] = "v1"
 
     install = adapter.install_bridge(
@@ -195,6 +204,7 @@ def run(argv: Sequence[str] | None = None) -> int:
                         args.codex_home,
                         args.bridge_json or "",
                         args.command,
+                        args.parent_model,
                     )
                 elif args.command == "disable":
                     payload = adapter.disable(state, _backend(), platform_home=args.codex_home)
