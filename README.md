@@ -126,6 +126,27 @@ OpenCode Go / deepseek-v4-flash
 - **正式可诊断运行时**：支持 `prepare`、setup / repair / disable / uninstall、`status`、`doctor --e2e`、transport、bridge、credential、Agent roster 与 handoff 管理。
 - **数据边界明确**：本机桥会把完成任务所需的提示词、上下文和源码转发到外部 OpenCode Go 服务，私有代码使用前应确认边界。
 
+### ⚠️ 启动顺序（重要）
+
+`deepseek-subagent` 的 V1 配置必须在 **Codex 创建新 Task 之前**生效。Windows / Codex 完整重启后，推荐按下面的顺序启动：
+
+```text
+双击 deepseek-subagent/双击运行prepare.cmd
+        ↓
+确认 prepare 成功
+        ↓
+启动 / 回到 Codex
+        ↓
+创建新的对话 / Task
+        ↓
+再创建 DeepSeek 子 Agent
+```
+
+- `prepare` 会校验并准备 `multi_agent_v1` transport，同时检查 / 恢复本地 bridge。
+- 已经初始化为 **Multi-Agent V2** 的当前 Task **不能原地切回 V1**；即使 `prepare` 修复成功，也只能对之后创建的新 Task 生效。
+- 如果安全门禁提示当前 Task 已是 V2，先确认 `prepare` 成功，再创建一个新的 Codex Task 继续即可，不需要重新安装 Skill。
+- 同一个已经正常工作的 V1 Task 内无需每轮重复执行 `prepare`；关键是完整重启后，在新 Task 创建前先运行一次。
+
 适合大型 RTL / Vivado / Vitis / Python 工程中的专项助手、代码探索、review 和低成本多 Agent 协作。
 
 ---
@@ -180,6 +201,7 @@ sopc-skill/
 └── deepseek-subagent/
     ├── SKILL.md
     ├── VERSION
+    ├── 双击运行prepare.cmd
     ├── agents/
     ├── evals/
     ├── references/
