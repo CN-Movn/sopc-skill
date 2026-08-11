@@ -56,7 +56,7 @@
 | :--- | :---: | :--- | :--- |
 | [`rtl-style`](./rtl-style) | **v2.2.1** | AI 写 RTL 容易只顾功能、忽略时序/CDC/可维护性 | 中文注释硬约束、Timing by Construction、AMD 官方方法论、静态 checker、RTL 模板 |
 | [`py-hosttool`](./py-hosttool) | **v1.2.1** | Python 上位机项目经常从零搭壳、重复踩 GUI/串口/线程坑 | 复用成熟 PySide6 设计语言、完整模板、参考工程、串口资产、窗口框架与交付流程 |
-| [`deepseek-subagent`](./deepseek-subagent) | **v1.7.2** | Codex 子 Agent 成本高、重复扫代码、跨进程连续性容易被误判 | 固定 DeepSeek 路由、V1 fail-closed、进程内复用、持久 handoff 与 successor 连续性 |
+| [`deepseek-subagent`](./deepseek-subagent) | **v1.7.3** | Codex 子 Agent 成本高、重复扫代码、跨进程连续性与 handoff 权限容易踩坑 | 固定 DeepSeek 路由、V1 fail-closed、一键 bootstrap、持久 handoff 与 successor 连续性 |
 
 三者分别对应一个真实工程链条：
 
@@ -119,33 +119,36 @@ OpenCode Go / deepseek-v4-flash
 ### 🌟 核心卖点
 
 - **进程内复用 + 持久交接**：同一 Codex 进程内优先通过 `send_input` 继续使用已熟悉项目的子 Agent；完整退出、Windows 重启、`shutdown` 或 `not_found` 后，不伪称恢复旧 Agent，而是通过 `.local/handoffs` 中的可验证事实让 successor 接续工作。
-- **V1 fail-closed**：首次 DeepSeek 操作前通过 `prepare --json` 校验并准备 `multi_agent_v1` transport；条件不满足时明确失败，不静默回落到不兼容路径。
+- **一键 bootstrap + 持久权限**：`双击运行prepare.cmd` 会先执行 `bootstrap`，保留已有 `sandbox_workspace_write.writable_roots`，只追加当前 Skill 的 `.local\handoffs`，并在需要时选择 `workspace-write`；随后执行 `repair` 持久配置 Multi-Agent V1 与本地 bridge。
+- **V1 fail-closed**：每个 Task 首次 DeepSeek 操作前仍通过 `prepare --json` 校验实际 transport；当前 Task 不是 V1 时明确失败，不静默回落到不兼容路径。
 - **逐轮可验证 continuity**：每轮子 Agent 工作都绑定稳定 role / scope / project root，并要求追加 handoff record；父 Agent 校验新增记录和 marker 后才接受结果。
 - **关闭 / 替换权属于用户**：任务完成、暂时 idle、容量压力、进程退出或 `not_found` 都不会自动触发 `close_agent`；需要 successor 或关闭旧 Agent 时由用户决定。
 - **低成本固定路由**：把适合扫描、review、局部实现和重复工作的任务稳定交给 DeepSeek，降低长期多 Agent 协作成本。
-- **正式可诊断运行时**：支持 `prepare`、setup / repair / disable / uninstall、`status`、`doctor --e2e`、transport、bridge、credential、Agent roster 与 handoff 管理。
+- **正式可诊断运行时**：支持 `bootstrap`、`prepare`、setup / repair / disable / uninstall、`status`、`doctor --e2e`、transport、bridge、credential、Agent roster 与 handoff 管理。
 - **数据边界明确**：本机桥会把完成任务所需的提示词、上下文和源码转发到外部 OpenCode Go 服务，私有代码使用前应确认边界。
 
-### ⚠️ 启动顺序（重要）
+### ⚠️ 首次安装 / 更新后的初始化（重要）
 
-`deepseek-subagent` 的 V1 配置必须在 **Codex 创建新 Task 之前**生效。Windows / Codex 完整重启后，推荐按下面的顺序启动：
+从 v1.7.3 起，`双击运行prepare.cmd` 负责一次性完成 **handoff 写权限 bootstrap + Multi-Agent V1 repair**。推荐在首次安装、更新 Skill 或配置发生漂移后执行：
 
 ```text
 双击 deepseek-subagent/双击运行prepare.cmd
         ↓
-确认 prepare 成功
+[1/2] bootstrap：持久加入 .local\handoffs writable root
         ↓
-启动 / 回到 Codex
+[2/2] repair：持久配置 Multi-Agent V1 与本地 bridge
         ↓
-创建新的对话 / Task
+完整退出 Codex
+        ↓
+重新启动 Codex，并创建新的对话 / Task
         ↓
 再创建 DeepSeek 子 Agent
 ```
 
-- `prepare` 会校验并准备 `multi_agent_v1` transport，同时检查 / 恢复本地 bridge。
-- 已经初始化为 **Multi-Agent V2** 的当前 Task **不能原地切回 V1**；即使 `prepare` 修复成功，也只能对之后创建的新 Task 生效。
-- 如果安全门禁提示当前 Task 已是 V2，先确认 `prepare` 成功，再创建一个新的 Codex Task 继续即可，不需要重新安装 Skill。
-- 同一个已经正常工作的 V1 Task 内无需每轮重复执行 `prepare`；关键是完整重启后，在新 Task 创建前先运行一次。
+- **配置是持久的**：初始化成功后，正常的后续 Codex / Windows 重启不需要每次重复运行这个脚本。
+- **重复运行安全**：`bootstrap` 是幂等的，不会重复添加 handoff writable root，也不会覆盖已有 writable roots；如果用户已经选择 `danger-full-access`，不会降级。
+- **V2 Task 不能原地切回 V1**：如果当前 Task 已初始化为 Multi-Agent V2，即使修复成功，也必须在重启 / 配置生效后创建新的 Task。
+- 如果更换 Skill 安装目录、Codex 配置被其它工具改动、handoff 写入再次触发提权，或 V1 门禁提示配置漂移，可重新运行该脚本后再重启 Codex。
 
 适合大型 RTL / Vivado / Vitis / Python 工程中的专项助手、代码探索、review 和低成本多 Agent 协作。
 
@@ -227,7 +230,7 @@ Use $py-hosttool to build a PySide6 diagnostic host tool for this FPGA board, re
 ```
 
 ```text
-Use $deepseek-subagent to prepare the Codex DeepSeek V1 route, reuse current-process children when possible, and preserve verified project continuity through durable handoffs.
+Use $deepseek-subagent to verify the Codex DeepSeek V1 route, reuse current-process children when possible, and preserve verified project continuity through durable handoffs.
 ```
 
 对于包含 scripts / assets / runtime 的 Skill，建议使用完整目录，不要只复制 `SKILL.md`。
