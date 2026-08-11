@@ -56,7 +56,7 @@
 | :--- | :---: | :--- | :--- |
 | [`rtl-style`](./rtl-style) | **v2.2.1** | AI 写 RTL 容易只顾功能、忽略时序/CDC/可维护性 | 中文注释硬约束、Timing by Construction、AMD 官方方法论、静态 checker、RTL 模板 |
 | [`py-hosttool`](./py-hosttool) | **v1.2.1** | Python 上位机项目经常从零搭壳、重复踩 GUI/串口/线程坑 | 复用成熟 PySide6 设计语言、完整模板、参考工程、串口资产、窗口框架与交付流程 |
-| [`deepseek-subagent`](./deepseek-subagent) | **v1.4.3** | Codex 子 Agent 成本高、重复扫代码、生命周期不可控 | 固定 DeepSeek 路由、可诊断本地桥、长期 Agent 复用、用户掌握关闭/替换权 |
+| [`deepseek-subagent`](./deepseek-subagent) | **v1.7.2** | Codex 子 Agent 成本高、重复扫代码、跨进程连续性容易被误判 | 固定 DeepSeek 路由、V1 fail-closed、进程内复用、持久 handoff 与 successor 连续性 |
 
 三者分别对应一个真实工程链条：
 
@@ -118,13 +118,15 @@ OpenCode Go / deepseek-v4-flash
 
 ### 🌟 核心卖点
 
-- **长期复用上下文**：子 Agent 默认持久化，同范围任务优先 `send_input`，shutdown 时优先 `resume_agent`，避免反复从头扫描工程。
-- **关闭 / 替换权属于用户**：任务完成、暂时 idle、容量压力都不自动触发 `close_agent`；异常 Agent 也先报告证据，再由用户决定是否替换。
+- **进程内复用 + 持久交接**：同一 Codex 进程内优先通过 `send_input` 继续使用已熟悉项目的子 Agent；完整退出、Windows 重启、`shutdown` 或 `not_found` 后，不伪称恢复旧 Agent，而是通过 `.local/handoffs` 中的可验证事实让 successor 接续工作。
+- **V1 fail-closed**：首次 DeepSeek 操作前通过 `prepare --json` 校验并准备 `multi_agent_v1` transport；条件不满足时明确失败，不静默回落到不兼容路径。
+- **逐轮可验证 continuity**：每轮子 Agent 工作都绑定稳定 role / scope / project root，并要求追加 handoff record；父 Agent 校验新增记录和 marker 后才接受结果。
+- **关闭 / 替换权属于用户**：任务完成、暂时 idle、容量压力、进程退出或 `not_found` 都不会自动触发 `close_agent`；需要 successor 或关闭旧 Agent 时由用户决定。
 - **低成本固定路由**：把适合扫描、review、局部实现和重复工作的任务稳定交给 DeepSeek，降低长期多 Agent 协作成本。
-- **正式可诊断运行时**：支持 setup / repair / disable / uninstall、`status`、`doctor --e2e`、token / provider / bridge 状态管理。
+- **正式可诊断运行时**：支持 `prepare`、setup / repair / disable / uninstall、`status`、`doctor --e2e`、transport、bridge、credential、Agent roster 与 handoff 管理。
 - **数据边界明确**：本机桥会把完成任务所需的提示词、上下文和源码转发到外部 OpenCode Go 服务，私有代码使用前应确认边界。
 
-适合大型 RTL / Vivado / Vitis / Python 工程中的长期专项助手和低成本多 Agent 协作。
+适合大型 RTL / Vivado / Vitis / Python 工程中的专项助手、代码探索、review 和低成本多 Agent 协作。
 
 ---
 
@@ -140,7 +142,7 @@ py-hosttool
   └─ 快速构建稳定的调试与诊断上位机
        ↓
 deepseek-subagent
-  └─ 让多个长期子 Agent 分担扫描、评审、修改和专项任务
+  └─ 让多个可持续协作的子 Agent 分担扫描、评审、修改和专项任务
 ```
 
 例如：
@@ -149,7 +151,7 @@ deepseek-subagent
 - DeepSeek RTL 助手长期负责某一组 RTL / timing 问题；
 - `rtl-style` 约束它的代码和 review 标准；
 - Python 助手按 `py-hosttool` 的设计语言开发对应上位机；
-- 已经熟悉项目的子 Agent 后续继续复用，而不是每轮重新建立上下文。
+- 当前 Codex 进程内继续复用已经熟悉项目的子 Agent；跨重启则让 successor 读取持久 handoff 中的已验证事实，而不是假装恢复旧运行态。
 
 这也是这个仓库真正想解决的问题：**不只是给 AI 一套 prompt，而是给 AI 一套更接近真实工程团队的工作方式。**
 
@@ -203,7 +205,7 @@ Use $py-hosttool to build a PySide6 diagnostic host tool for this FPGA board, re
 ```
 
 ```text
-Use $deepseek-subagent to configure and diagnose the Codex DeepSeek child-agent route, then reuse existing DeepSeek project assistants when possible.
+Use $deepseek-subagent to prepare the Codex DeepSeek V1 route, reuse current-process children when possible, and preserve verified project continuity through durable handoffs.
 ```
 
 对于包含 scripts / assets / runtime 的 Skill，建议使用完整目录，不要只复制 `SKILL.md`。
@@ -218,36 +220,4 @@ Use $deepseek-subagent to configure and diagnose the Codex DeepSeek child-agent 
 - 没启动 GUI / 串口 / PyInstaller，不声称上位机已完成端到端验证；
 - 静态 checker 只代表 preflight，不替代实际工具链；
 - reference project 是复用资产，不代表业务协议可以直接照搬；
-- DeepSeek 子 Agent 通过外部 OpenCode Go 服务处理任务，私有源码使用前应确认数据边界；
-- 真实 API Key、bridge token、状态文件和本机缓存不应进入仓库。
-
-`deepseek-subagent` 的真实本地凭据文件均由 `.gitignore` 保护，仓库只保留示例和说明。
-
----
-
-## 🧭 设计原则
-
-这个仓库持续遵循几条原则：
-
-1. **工程事实优先于 AI 猜测** —— 信息不足时指出缺口，不自动补关键条件；
-2. **已经验证的链路优先保护** —— 修改应尽量局部、可回退、可复核；
-3. **先解决结构问题，再解决表面症状** —— RTL 先看架构与 timing，GUI 先看分层与线程，Agent 先看生命周期和上下文；
-4. **把确定性工作交给脚本** —— checker / validator 能做的，不让模型每次重新猜；
-5. **把成熟资产真正留下来** —— 模板、参考工程、设计语言和工作流都应该能够直接复用；
-6. **尽量节省上下文和 token** —— progressive disclosure、长期 Agent 复用、精炼交接优先；
-7. **对验证边界保持诚实** —— 静态分析、模型判断和真实工具链验证必须明确区分。
-
----
-
-<div align="center">
-
-### ⭐ 这个仓库适合谁？
-
-正在尝试把 **ChatGPT / Codex / AI Agent 真正接入 FPGA、SoPC、嵌入式板卡开发流程**，
-而不是只把 AI 当成代码补全工具的人。
-
-如果这些 Skill 对你的工作有帮助，欢迎 Star、Fork，并根据自己的工程继续扩展。
-
-**让 AI 少一点“看起来能跑”，多一点“真正懂工程”。**
-
-</div>
+- `deepseek-subagent/.local` 中的真实 credential、bridge/runtime 状态、Agent roster 与 handoff 属于本机持久数据，不应提交到仓库。

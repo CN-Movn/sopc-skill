@@ -1,12 +1,55 @@
-# Python cache
+# Python bytecode and test/tool caches
 __pycache__/
 *.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 
-# Real upstream credential and generated localhost bridge secrets
-.local/opencode-go.key
-.local/local-bridge-token.txt
-.local/local-bridge-token-state.json
+# Packaging and local environments
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
 
-# Local runtime artifacts
+# The package keeps only documentation and a credential placeholder in .local
+.local/*
+!.local/README.txt
+!.local/opencode-go.key.example
+
+# Bridge/manager state must live outside the published Skill package
+bridge.pid
+bridge.json
+bridge-runtime.json
+agents.json
+backups/
+
+# Logs, temporary files, editor state, and OS metadata
 *.log
 *.tmp
+*.temp
+*.bak
+*.old
+*.orig
+*.rej
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
