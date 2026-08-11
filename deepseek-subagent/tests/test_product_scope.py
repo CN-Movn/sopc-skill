@@ -33,8 +33,8 @@ class ProductScopeTests(unittest.TestCase):
         self.assertEqual(OpenCodeGoProvider.model, "deepseek-v4-flash")
 
     def test_release_uses_ultra_reasoning(self) -> None:
-        self.assertEqual(__version__, "1.7.2")
-        self.assertEqual((SKILL_ROOT / "VERSION").read_text(encoding="utf-8").strip(), "1.7.2")
+        self.assertEqual(__version__, "1.7.3")
+        self.assertEqual((SKILL_ROOT / "VERSION").read_text(encoding="utf-8").strip(), "1.7.3")
         self.assertEqual(make_role(OpenCodeGoProvider).reasoning_effort, "ultra")
 
     def test_setup_can_mark_actual_parent_model_v1_for_next_task(self) -> None:
@@ -293,7 +293,8 @@ class ProductScopeTests(unittest.TestCase):
         launcher = (SKILL_ROOT / "双击运行prepare.cmd").read_text(encoding="utf-8")
         self.assertIn("%~dp0scripts\\deepseek-subagent.ps1", launcher)
         self.assertIn("-NoProfile -ExecutionPolicy Bypass", launcher)
-        self.assertIn('prepare --json', launcher)
+        self.assertIn('bootstrap --json', launcher)
+        self.assertIn('repair --json', launcher)
         self.assertIn('pause', launcher.lower())
         self.assertNotIn("Administrator", launcher)
         self.assertNotIn("C:\\Users\\", launcher)

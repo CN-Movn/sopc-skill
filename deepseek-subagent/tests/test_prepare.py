@@ -73,6 +73,36 @@ class AutomaticPrepareTests(unittest.TestCase):
         ensure_bridge.assert_not_called()
         repair.assert_not_called()
 
+    def test_bootstrap_persists_handoff_root_and_is_idempotent(self) -> None:
+        manager = load_manager()
+        temporary, state = self._state(manager)
+        self.addCleanup(temporary.cleanup)
+        codex_home = Path(temporary.name) / "codex-home"
+        codex_home.mkdir()
+        config = codex_home / "config.toml"
+        config.write_text(
+            'model = "gpt-parent"\n'
+            '[sandbox_workspace_write]\n'
+            'writable_roots = [\n'
+            '    "D:\\\\Existing",\n'
+            ']\n',
+            encoding="utf-8",
+        )
+        with mock.patch.object(manager, "_codex_home", return_value=codex_home):
+            first = manager._bootstrap_future_task_config(state)
+            first_bytes = config.read_bytes()
+            second = manager._bootstrap_future_task_config(state)
+
+        parsed = manager.tomllib.loads(config.read_text(encoding="utf-8"))
+        self.assertTrue(first["changed"])
+        self.assertFalse(second["changed"])
+        self.assertEqual(config.read_bytes(), first_bytes)
+        self.assertEqual(parsed["sandbox_mode"], "workspace-write")
+        self.assertIn("D:\\Existing", parsed["sandbox_workspace_write"]["writable_roots"])
+        self.assertIn(first["handoff_root"], parsed["sandbox_workspace_write"]["writable_roots"])
+        self.assertTrue(first["restart_required"])
+        self.assertTrue(first["new_task_required"])
+
     def test_prepare_repairs_static_drift_before_child_operation(self) -> None:
         manager = load_manager()
         temporary, state = self._state(manager)

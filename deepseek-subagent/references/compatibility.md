@@ -101,6 +101,8 @@ v1.7.1 fixes a fresh-install bridge startup race observed on Windows. Local toke
 
 v1.7.2 clarifies and verifies relocation-safe cross-computer installation without changing production runtime behavior. Runtime and launcher paths remain derived from their installed files and are regression-tested against development-checkout dependencies. A portable install uses the clean release tree only; the active installed directory and `.local` are deliberately excluded because they contain a live bridge and machine-bound credentials, ACL/PID state, roster ownership, handoffs, and absolute project roots. Codex task workspace paths are likewise not portable task state. Bridge ABI, V1 routing, token handling, Agent lifecycle, and configuration ownership are unchanged.
 
+v1.7.3 adds an idempotent future-task bootstrap used by `双击运行prepare.cmd`. The bootstrap preserves existing `sandbox_workspace_write.writable_roots`, adds only the installed Skill's canonical `.local\handoffs` root, and selects `workspace-write` unless the user already chose `danger-full-access`. The launcher then runs the existing managed `repair` path so Multi-Agent V1 and the local bridge are persistently configured before Codex is restarted and a new conversation is created. Re-running the launcher is safe and does not duplicate the handoff root. Bridge ABI, V1 transport, credentials, handoff format, roster ownership, and child lifecycle are unchanged.
+
 ## Runtime behavior and diagnosis
 
 Operational details for diagnosis; normal Codex operation follows SKILL.md.

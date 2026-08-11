@@ -146,6 +146,90 @@ def set_table_bool(text: str, table: str, key: str, value: bool) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def set_table_string_array(text: str, table: str, key: str, values: list[str]) -> str:
+    """Set one TOML string-array field while preserving unrelated text."""
+
+    if not all(isinstance(value, str) for value in values):
+        raise ManagerError("invalid_config", f"{table}.{key} must be an array of strings")
+
+    lines = text.splitlines()
+    assignment = [f"{key} = [", *(f"    {json.dumps(value, ensure_ascii=False)}," for value in values), "]"]
+    header = toml_table_header(table)
+    start = next((index for index, line in enumerate(lines) if header.match(line.strip())), None)
+    if start is None:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines.extend((f"[{table}]", *assignment))
+        result = "\n".join(lines).rstrip() + "\n"
+        parse_toml_text(result)
+        return result
+
+    table_end = next(
+        (index for index in range(start + 1, len(lines)) if lines[index].strip().startswith("[")),
+        len(lines),
+    )
+    key_pattern = re.compile(rf"^\s*{re.escape(key)}\s*=")
+    field_start = next(
+        (index for index in range(start + 1, table_end) if key_pattern.match(lines[index])),
+        None,
+    )
+    if field_start is None:
+        lines[start + 1 : start + 1] = assignment
+        result = "\n".join(lines).rstrip() + "\n"
+        parse_toml_text(result)
+        return result
+
+    field_end = _toml_array_assignment_end(lines, field_start, table_end, table, key)
+    lines[field_start : field_end + 1] = assignment
+    result = "\n".join(lines).rstrip() + "\n"
+    parse_toml_text(result)
+    return result
+
+
+def _toml_array_assignment_end(
+    lines: list[str],
+    start: int,
+    limit: int,
+    table: str,
+    key: str,
+) -> int:
+    depth = 0
+    started = False
+    quote: str | None = None
+    escaped = False
+    for line_index in range(start, limit):
+        line = lines[line_index]
+        offset = line.find("=") + 1 if line_index == start else 0
+        in_comment = False
+        for char in line[offset:]:
+            if in_comment:
+                break
+            if quote == '"':
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    quote = None
+                continue
+            if quote == "'":
+                if char == "'":
+                    quote = None
+                continue
+            if char in {'"', "'"}:
+                quote = char
+            elif char == "#":
+                in_comment = True
+            elif char == "[":
+                started = True
+                depth += 1
+            elif char == "]" and started:
+                depth -= 1
+                if depth == 0:
+                    return line_index
+    raise ManagerError("invalid_config", f"{table}.{key} is not a complete TOML array")
+
+
 def remove_table_bool_if_value(text: str, table: str, key: str, expected: bool) -> str:
     lines = text.splitlines()
     header = toml_table_header(table)

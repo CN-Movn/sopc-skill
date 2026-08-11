@@ -52,6 +52,11 @@ from deepseek_subagent.core.manifest import read_manifest, write_manifest  # noq
 from deepseek_subagent.core.paths import PROJECT_NAME, state_paths  # noqa: E402
 from deepseek_subagent.core.transaction import LOCK_WAIT_SECONDS  # noqa: E402
 from deepseek_subagent.platforms.codex.paths import CodexPaths  # noqa: E402
+from deepseek_subagent.platforms.codex.config import (  # noqa: E402
+    parse_toml_text,
+    set_table_string_array,
+    set_top_level_key,
+)
 from deepseek_subagent.platforms.codex.transport import (  # noqa: E402
     assess_v1_transport,
     inspect_current_task,
@@ -499,6 +504,67 @@ def _codex_home(state) -> Path:
     return Path(manifest.get("platform_home") or os.environ.get("CODEX_HOME") or Path.home() / ".codex").expanduser()
 
 
+def _same_path(left: str, right: str) -> bool:
+    return os.path.normcase(os.path.abspath(os.path.expandvars(left))) == os.path.normcase(
+        os.path.abspath(os.path.expandvars(right))
+    )
+
+
+def _bootstrap_future_task_config(state) -> dict[str, Any]:
+    """Persist V1-task sandbox prerequisites for future Codex conversations."""
+
+    config_file = CodexPaths.from_home(_codex_home(state)).config
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+    text = config_file.read_text(encoding="utf-8") if config_file.is_file() else ""
+    parsed = parse_toml_text(text) if text.strip() else {}
+    original = text
+    actions: list[str] = []
+
+    sandbox_mode = parsed.get("sandbox_mode")
+    if sandbox_mode != "danger-full-access" and sandbox_mode != "workspace-write":
+        text = set_top_level_key(text, "sandbox_mode", "workspace-write")
+        actions.append("sandbox_mode_workspace_write")
+
+    parsed = parse_toml_text(text) if text.strip() else {}
+    sandbox_table = parsed.get("sandbox_workspace_write") or {}
+    if not isinstance(sandbox_table, dict):
+        raise ManagerError("invalid_config", "sandbox_workspace_write must be a TOML table")
+    roots = sandbox_table.get("writable_roots") or []
+    if not isinstance(roots, list) or not all(isinstance(root, str) for root in roots):
+        raise ManagerError(
+            "invalid_config",
+            "sandbox_workspace_write.writable_roots must be an array of strings",
+        )
+
+    handoff_root = str((SKILL_DIR / ".local" / "handoffs").resolve())
+    if not any(_same_path(root, handoff_root) for root in roots):
+        text = set_table_string_array(
+            text,
+            "sandbox_workspace_write",
+            "writable_roots",
+            [*roots, handoff_root],
+        )
+        actions.append("handoff_writable_root")
+
+    parse_toml_text(text)
+    changed = text != original
+    if changed:
+        atomic_write(config_file, text.encode("utf-8"))
+
+    final = parse_toml_text(text) if text.strip() else {}
+    return {
+        "status": "future_task_bootstrap_configured",
+        "changed": changed,
+        "actions": actions,
+        "config_file": str(config_file.resolve()),
+        "sandbox_mode": final.get("sandbox_mode"),
+        "handoff_root": handoff_root,
+        "restart_required": True,
+        "new_task_required": True,
+        "message": "Persistent V1 sandbox prerequisites are configured; fully restart Codex and create a new task.",
+    }
+
+
 def _current_task_evidence(state) -> dict[str, Any]:
     return inspect_current_task(_codex_home(state))
 
@@ -934,7 +1000,7 @@ def _main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "command",
-        choices=("setup", "prepare", "status", "doctor", "repair", "disable", "uninstall", "bridge", "credentials", "agents", "transport", "reinstall-prep"),
+        choices=("bootstrap", "setup", "prepare", "status", "doctor", "repair", "disable", "uninstall", "bridge", "credentials", "agents", "transport", "reinstall-prep"),
     )
     parser.add_argument(
         "bridge_action",
@@ -971,6 +1037,11 @@ def _main(argv: list[str] | None = None) -> int:
     parser.add_argument("--keep-skill", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     state = _state()
+
+    if args.command == "bootstrap":
+        payload = _bootstrap_future_task_config(state)
+        print(json.dumps(payload, ensure_ascii=False, indent=2) if args.json else payload["status"])
+        return 0
 
     if args.command == "agents":
         action = args.bridge_action or "list"
