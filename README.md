@@ -54,9 +54,11 @@
 
 | Skill | 当前版本 | 主要解决什么问题 | 核心优势 |
 | :--- | :---: | :--- | :--- |
-| [`rtl-style`](./rtl-style) | **v2.2.1** | AI 写 RTL 容易只顾功能、忽略时序/CDC/可维护性 | 中文注释硬约束、Timing by Construction、AMD 官方方法论、静态 checker、RTL 模板 |
-| [`py-hosttool`](./py-hosttool) | **v1.2.1** | Python 上位机项目经常从零搭壳、重复踩 GUI/串口/线程坑 | 复用成熟 PySide6 设计语言、完整模板、参考工程、串口资产、窗口框架与交付流程 |
+| [`rtl-style`](./rtl-style) | **v2.2.2** | AI 写 RTL 容易只顾功能、忽略时序/CDC/可维护性 | 中文注释硬约束、Timing by Construction、AMD 官方方法论、静态 checker、RTL 模板 |
+| [`py-hosttool`](./py-hosttool) | **v1.2.2** | Python 上位机项目经常从零搭壳、重复踩 GUI/串口/线程坑 | 复用成熟 PySide6 设计语言、完整模板、参考工程、串口资产、窗口框架与交付流程 |
 | [`deepseek-subagent`](./deepseek-subagent) | **v1.7.3** | Codex 子 Agent 成本高、重复扫代码、跨进程连续性与 handoff 权限容易踩坑 | 固定 DeepSeek 路由、V1 fail-closed、一键 bootstrap、持久 handoff 与 successor 连续性 |
+
+各 Skill 根目录的 `VERSION` 是当前版本的权威来源；仓库根目录的版本表由 `scripts/validate_release_versions.py` 做一致性校验，避免发布后根 README 漏同步。
 
 三者分别对应一个真实工程链条：
 
@@ -186,13 +188,24 @@ deepseek-subagent
 ```text
 sopc-skill/
 ├── README.md
+├── scripts/
+│   └── validate_release_versions.py
+├── tests/
+│   └── test_release_versions.py
 ├── rtl-style/
+│   ├── VERSION
+│   ├── CHANGELOG.md
+│   ├── README.md
 │   ├── SKILL.md
 │   ├── agents/
 │   ├── scripts/
+│   ├── tests/
 │   └── references/
 │
 ├── py-hosttool/
+│   ├── VERSION
+│   ├── CHANGELOG.md
+│   ├── README.md
 │   ├── SKILL.md
 │   ├── references/
 │   ├── scripts/
@@ -231,6 +244,13 @@ Use $py-hosttool to build a PySide6 diagnostic host tool for this FPGA board, re
 
 ```text
 Use $deepseek-subagent to verify the Codex DeepSeek V1 route, reuse current-process children when possible, and preserve verified project continuity through durable handoffs.
+```
+
+仓库级版本一致性可以直接运行：
+
+```bash
+python scripts/validate_release_versions.py
+python -B -m unittest discover -s tests -v
 ```
 
 对于包含 scripts / assets / runtime 的 Skill，建议使用完整目录，不要只复制 `SKILL.md`。
