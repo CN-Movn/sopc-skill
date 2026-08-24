@@ -1,6 +1,7 @@
 CHANGELOG.md
 README.md
 SKILL.md
+VERSION
 assets/reference_projects/ArqMinSystem_v1.1/README.md
 assets/reference_projects/ArqMinSystem_v1.1/client.py
 assets/reference_projects/ArqMinSystem_v1.1/diagnostics.py
@@ -64,3 +65,6 @@ references/window_chrome.md
 review_questions.md
 scripts/bootstrap_project.py
 scripts/validate_skill.py
+scripts/validate_version.py
+scripts/tests/test_bootstrap_project.py
+scripts/tests/test_version_metadata.py

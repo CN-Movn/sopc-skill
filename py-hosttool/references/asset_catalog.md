@@ -16,6 +16,19 @@
 - `tests/`：不依赖真实设备的静态/纯函数测试骨架；
 - `HostTool.spec`、`build.bat`：Windows 打包骨架。
 
+模板是可运行的壳和回归示例，不是业务成品：没有项目协议、寄存器白名单、真实 request client、诊断采集、性能模型或可上板的自动流程。`dashboard_window.py` 当前尤其是布局占位；选择 dashboard 后仍需在项目层接入 transport、client、services、diagnostics 和 workflows。
+
+## 资产覆盖矩阵
+
+| 能力 | 模板是否覆盖 | 复用方式与边界 |
+|---|---|---|
+| 无边框窗口、置顶、布局和通用串口面板 | 有 | UI/外壳可直接复用，按目标布局做 smoke test |
+| 串口 worker 与 byte channel | 有 | 只能按 `serial_logging.md` 生命周期、generation、背压和 shutdown 契约复用 |
+| protocol parser、CRC、寄存器编码 | 无 | 依据用户 source of truth 和 golden vectors 新建/重写 |
+| request client、services、diagnostics、models、workflows | 仅来源工程有参考 | 按契约/模式定点复用；禁止复制业务字段、重试和流程事实 |
+| 协议单测、fake transport、offscreen GUI smoke | 仅有结构 | 测试向量、断连/重连断言和目标控件必须重建 |
+| PyInstaller spec/build | 有骨架 | 重新核对依赖、架构、DLL 和 frozen smoke；先交付 onedir |
+
 ## 2. 创建脚本
 
 `scripts/bootstrap_project.py`
@@ -25,6 +38,7 @@
 - 应用名称；
 - 版本；
 - EXE 名称；
+- 经目标设备文档确认的串口初始波特率；
 - 默认布局入口。
 
 不会复制来源工程业务协议。
@@ -52,6 +66,8 @@
 - `protocol.py`：分段/粘包帧提取和分析；
 - `MasterController_v1_4.spec`：PySide6/Conda DLL 冲突处理；
 - `tests/test_protocol.py`：协议测试向量。
+
+来源工程的协议向量、寄存器和业务流程不是新项目事实；只能用来理解测试形状，不能代替新项目 source of truth。
 
 ## 4. 选择顺序
 

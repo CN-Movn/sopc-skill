@@ -9,7 +9,9 @@
 - `send(data)`；
 - `shutdown()`。
 
-这些方法只向线程安全 `queue.Queue` 写命令。worker 在线程 `run()` 中顺序处理命令和读取数据，并通过 signals 返回 `opened/closed/received/sent/error`。
+这些方法只向线程安全队列写命令。模板将低频、幂等的 `open/close` 控制队列与有界发送队列分开，避免高频发送饿死关闭；GUI 应抑制重复连接操作，不能把控制队列当作业务任务队列。worker 在线程 `run()` 中处理命令和读取数据，并通过 signals 返回 `opened/closed/received/sent/error`。发送队列满使用 `command_rejected`/`False` 表达背压，不能冒充 I/O `error`，否则 GUI 会错误显示断连。
+
+这只是实现形状，不是完整生命周期契约。实际项目还必须明确：worker 的启动方、`open/close/shutdown` 幂等性、有限 read timeout 或可唤醒关闭机制、停止确认和 wait 超时处理、断连时待发送队列/周期任务的处理、队列背压以及异常到 `closed` 的唯一收敛路径。裸 `serial-console` 只展示同一 worker 按顺序发出的原始通道事件，可以不把 generation 暴露到 UI；一旦接入 request/pending、自动重连或其他可能晚到的业务回调，必须由 transport adapter 或 client 在连接边界补齐并校验 generation。`SerialWorker` 应可被 fake/loopback transport 替换，不能把测试绑定到真实 COM 口。
 
 优点：
 
@@ -112,7 +114,7 @@ checkbox 可作为“模式选择”保留勾选状态；真正的活动态由 `
 - RX/TX/INFO/WARN/ERROR；
 - 原始 HEX；
 - ASCII/语义文本；
-- 设备、端口和版本元数据。
+- 应用版本、端口和串口参数；设备/固件/协议版本在项目能够识别时一并记录。
 
 日志控件设置最大块数或应用环形缓冲，避免长时间运行无限增长。
 
@@ -128,11 +130,13 @@ checkbox 可作为“模式选择”保留勾选状态；真正的活动态由 `
 
 ## 9. 协议流缓存
 
-串口 worker 只负责 bytes 通道，帧提取放在协议层：
+串口 worker 只负责 bytes 通道，帧提取放在协议层。协议实现必须以用户确认的文档、RTL/固件定义或抓包说明为 source of truth；来源工程只能提供实现参考。
 
 ```python
 frames, remainder = parser.feed(previous_remainder + new_bytes)
 ```
+
+约定由调用方持有 `remainder`，parser 不得同时隐式保留同一份缓存；连接建立或重连时显式 `reset()`。每个 parser 必须声明帧长度字段的含义、最大帧长、噪声/缓存上限和错误后的重新同步策略，并以每种帧的 golden vectors 锁定编码结果。CRC/checksum 不能只写“CRC”，必须记录覆盖范围、poly、init、refin/refout、xorout 和结果字节序。
 
 解析器必须覆盖：
 
@@ -142,3 +146,5 @@ frames, remainder = parser.feed(previous_remainder + new_bytes)
 - 直接帧与外层封装帧；
 - 错误长度/校验后的重新同步；
 - 缓存上限，避免异常数据导致无限增长。
+
+解析结果交给 client 前还要区分响应、主动上报、重复/迟到帧和未识别帧；request 的 connection generation 与 sequence 不匹配时只能记录诊断信息，不能完成当前请求。

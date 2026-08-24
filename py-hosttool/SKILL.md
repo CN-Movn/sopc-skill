@@ -26,6 +26,8 @@ description: "Build, refactor, review, test, and package stable PySide6 desktop 
 7. **验证再交付**：至少完成静态编译、协议单测、窗口 offscreen smoke test、断连/重连与关闭路径检查；只有实际运行过的项目才可声称通过。
 8. **最后打包**：使用受控的 PyInstaller spec；不要用无差别 `collect_all()`，不要把构建缓存或 EXE 放回 skill。
 
+模板是可运行的 UI、串口和窗口外壳，不是带有真实协议、寄存器表、业务流程或设备联调能力的成品。生成项目必须把用户提供的协议/寄存器事实接入明确的 transport、protocol、client 和业务层，并为所选布局补齐真实连接状态与错误恢复。
+
 ## Hard Rules
 
 - 保持现有设计语言，除非用户明确要求更换风格。
@@ -36,6 +38,9 @@ description: "Build, refactor, review, test, and package stable PySide6 desktop 
 - 串口对象只允许由串口工作线程持有；GUI 通过线程安全命令队列和 Qt signals 交互。
 - 协议流必须处理分段、粘包、噪声前缀、CRC/checksum 错误和剩余缓存，不能假设一次 `read()` 等于一帧。
 - 周期刷新、周期发送和自动流程必须有取消/停止路径；断连时清除 busy、timer、pending request 和差分基线。
+- 协议实现必须以用户确认的协议文档/寄存器来源为 source of truth，并以固定 golden vectors 锁定长度语义、字节序和 CRC/checksum 变体；不能从来源工程猜测字段。
+- 自动重试只允许用于明确幂等的请求，或协议提供了去重/幂等键；写寄存器、脉冲和其他不可幂等命令不得因超时自动重放。
+- 可能跨连接或取消边界晚到的 client/service/workflow 回调必须携带并校验 generation；布尔 `connected` 不能单独用来接收旧连接的数据。
 - 计数器差分必须考虑回绕、硬件清零和操作后重新建基线，不能制造虚假吞吐尖峰。
 - 写寄存器必须依据访问属性和写掩码建立白名单，RO/保留位/脉冲寄存器不能被通用写入口误写。
 - 日志同时服务“现场操作”和“问题复盘”：保留时间戳、方向、原始数据、语义结果、错误原因与导出能力。
@@ -45,15 +50,7 @@ description: "Build, refactor, review, test, and package stable PySide6 desktop 
 
 ## Design Baseline
 
-默认视觉基线：
-
-- Windows 桌面工具、浅色工业仪表风格；
-- `Microsoft YaHei UI` 9 pt，HEX/日志使用 `Consolas`；
-- 外框 `#85898f`，画布 `#f4f6f8`，标题栏 `#f3f6f9`，卡片/GroupBox 白色；
-- 主文本 `#202124`，说明文字 `#59636e`，强调蓝 `#0b57d0`；
-- 成功 `#188038`，警告 `#e37400`，错误 `#d93025`，关闭悬停 `#e81123`；
-- 标题栏高度 36 px，窗口按钮 46×35 px，内容边距约 10–12 px；
-- 用 `QSplitter`、固定侧栏宽度、最小宽度和 stretch factor 控制布局，不用大量绝对坐标。
+默认视觉基线是 Windows 浅色工业仪表风格、信息密集但可读、布局可缩放；具体颜色、字体、尺寸和窗口行为以 `references/ui_design_language.md`、`references/window_chrome.md` 和 `references/layout_patterns.md` 为单一详细来源，避免在本入口复制精确常量。布局应使用 `QSplitter`、最小/固定宽度和 stretch factor，不用大量绝对坐标。
 
 ## Reference Routing
 
@@ -66,6 +63,8 @@ description: "Build, refactor, review, test, and package stable PySide6 desktop 
 - 测试、静态检查、PyInstaller 和交付边界：`references/verification_and_delivery.md`。
 - 模板、示例、原始工程资产索引：`references/asset_catalog.md`。
 - 开工前需要向用户确认的关键事实：`review_questions.md`。
+
+按当前任务只阅读相关 reference；`SKILL.md` 保留共享约束和路由，具体契约与检查项以对应 reference 为准。
 
 ## Asset Routing
 

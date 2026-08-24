@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QSpinBox, QTextEdit, QVBoxLayout, QWidget,
 )
 
-from .config import APP_NAME, DEFAULT_BAUDRATE
+from .config import APP_NAME, APP_VERSION, DEFAULT_BAUDRATE
 from .serial_worker import SerialSettings, SerialWorker, available_ports
 from .theme import COLORS
 from .window_chrome import FramelessWindow, WindowGroup
@@ -91,10 +91,13 @@ class SerialConsolePanel(QWidget):
         self.worker.start()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._periodic_send)
-        self.rx_count = self.tx_count = self.frame_count = 0
+        self.rx_count = self.tx_count = self.tx_operation_count = 0
         self._connected = False
-        # (timestamp, kind, plaintext, hex_bytes_if_rendered_as_hex)
-        self._log_entries: list[tuple[str, str, str, bytes | None]] = []
+        self._last_settings: SerialSettings | None = None
+        # (timestamp, kind, plaintext, raw_bytes, render_as_hex)
+        # Keep raw bytes even when the current display mode is ASCII.  The
+        # display choice is presentation state, not a data-loss decision.
+        self._log_entries: list[tuple[str, str, str, bytes | None, bool]] = []
         self._build()
         self.refresh_ports(silent=True)
         self.log("INFO", "工具已启动，等待操作。")
@@ -253,6 +256,7 @@ class SerialConsolePanel(QWidget):
             parity=parity,
             rtscts=self.flow.isChecked(),
         )
+        self._last_settings = settings
         self.worker.open_port(settings)
 
     def _opened(self, port: str) -> None:
@@ -301,23 +305,46 @@ class SerialConsolePanel(QWidget):
         if self.periodic.isChecked():
             # First frame is sent immediately; only subsequent frames wait for
             # the configured interval.
-            self.worker.send(payload)
-            self._start_periodic()
+            if self._send_payload(payload):
+                self._start_periodic()
         else:
-            self.worker.send(payload)
+            self._send_payload(payload)
 
     def _sent(self, data: bytes) -> None:
         self.tx_count += len(data)
-        self.frame_count += 1
+        # Raw serial console traffic has no protocol framing knowledge.  Keep
+        # this as an operation count for the existing three-counter signal;
+        # callers must not interpret it as decoded protocol frames.
+        self.tx_operation_count += 1
         text = data.decode("utf-8", errors="replace")
-        self._append_log_entry("TX", text, data if self.tx_hex.isChecked() else None)
-        self.counts_changed.emit(self.rx_count, self.tx_count, self.frame_count)
+        self._append_log_entry(
+            "TX", text, data, show_hex=self.tx_hex.isChecked()
+        )
+        self.counts_changed.emit(
+            self.rx_count, self.tx_count, self.tx_operation_count
+        )
 
     def _received(self, data: bytes) -> None:
         self.rx_count += len(data)
         text = data.decode("utf-8", errors="replace")
-        self._append_log_entry("RX", text, data if self.rx_hex.isChecked() else None)
-        self.counts_changed.emit(self.rx_count, self.tx_count, self.frame_count)
+        self._append_log_entry(
+            "RX", text, data, show_hex=self.rx_hex.isChecked()
+        )
+        self.counts_changed.emit(
+            self.rx_count, self.tx_count, self.tx_operation_count
+        )
+
+    def _send_payload(self, payload: bytes) -> bool:
+        """Queue one payload and surface a full command queue to the user."""
+        accepted = self.worker.send(payload)
+        # ``None`` is accepted for compatibility with simple test doubles and
+        # older worker implementations; the template worker returns bool.
+        if accepted is False:
+            text = "发送队列已满，请稍后重试。"
+            self.status_changed.emit(text)
+            self.log("ERROR", text)
+            return False
+        return True
 
     def _periodic_toggled(self, enabled: bool) -> None:
         if not enabled and self.timer.isActive():
@@ -350,7 +377,8 @@ class SerialConsolePanel(QWidget):
             self._stop_periodic()
             self.log("ERROR", f"周期发送失败：{exc}")
             return
-        self.worker.send(payload)
+        if self._send_payload(payload) is False:
+            self._stop_periodic()
 
     def _serial_error(self, text: str) -> None:
         # A communication error invalidates an active periodic session and the
@@ -397,10 +425,23 @@ class SerialConsolePanel(QWidget):
             line_format.setForeground(QColor(color))
             cursor.insertText(line, line_format)
 
-    def _append_log_entry(self, kind: str, text: str,
-                          hex_data: bytes | None, stamp: str | None = None) -> None:
+    def _append_log_entry(
+        self,
+        kind: str,
+        text: str,
+        raw_data: bytes | None,
+        stamp: str | None = None,
+        *,
+        show_hex: bool | None = None,
+    ) -> None:
         stamp = stamp or datetime.now().strftime("%H:%M:%S.%f")[:-3]
-        self._log_entries.append((stamp, kind, text, bytes(hex_data) if hex_data is not None else None))
+        raw_bytes = bytes(raw_data) if raw_data is not None else None
+        # Existing callers that pass raw bytes expect HEX rendering.  New RX/TX
+        # callers pass show_hex explicitly while retaining raw bytes in either
+        # display mode.
+        if show_hex is None:
+            show_hex = raw_bytes is not None
+        self._log_entries.append((stamp, kind, text, raw_bytes, show_hex))
         if len(self._log_entries) > 5000:
             del self._log_entries[:500]
             self._rerender_log()
@@ -408,12 +449,13 @@ class SerialConsolePanel(QWidget):
 
         bar = self.log_view.verticalScrollBar()
         at_bottom = bar.value() >= bar.maximum() - 2
-        self._render_log_entry(stamp, kind, text, hex_data)
+        self._render_log_entry(stamp, kind, text, raw_bytes, show_hex)
         if at_bottom:
             self.log_view.moveCursor(QTextCursor.MoveOperation.End)
 
     def _render_log_entry(self, stamp: str, kind: str, text: str,
-                          hex_data: bytes | None) -> None:
+                          raw_data: bytes | None,
+                          show_hex: bool) -> None:
         data_color = {
             "RX": LOG_RX_COLOR,
             "TX": LOG_TX_COLOR,
@@ -428,8 +470,8 @@ class SerialConsolePanel(QWidget):
         header_format.setForeground(QColor(LOG_HEADER_COLOR))
         data_format.setForeground(QColor(data_color))
         cursor.insertText(f"[{stamp}] {kind}\n", header_format)
-        if hex_data is not None:
-            cursor.insertText(f"{self._format_hex_frame(hex_data)}\n\n", data_format)
+        if show_hex and raw_data is not None:
+            cursor.insertText(f"{self._format_hex_frame(raw_data)}\n\n", data_format)
         else:
             self._insert_status_text(cursor, f"{text}\n\n", data_format)
         self.log_view.setTextCursor(cursor)
@@ -442,8 +484,8 @@ class SerialConsolePanel(QWidget):
         was_at_bottom = bar.value() >= bar.maximum() - 2
         entries = list(self._log_entries)
         self.log_view.clear()
-        for stamp, kind, text, hex_data in entries:
-            self._render_log_entry(stamp, kind, text, hex_data)
+        for stamp, kind, text, raw_data, show_hex in entries:
+            self._render_log_entry(stamp, kind, text, raw_data, show_hex)
         bar.setValue(bar.maximum() if was_at_bottom else min(old_value, bar.maximum()))
 
     def resizeEvent(self, event) -> None:
@@ -456,25 +498,49 @@ class SerialConsolePanel(QWidget):
         self.log_view.clear()
 
     def reset_counts(self) -> None:
-        self.rx_count = self.tx_count = self.frame_count = 0
+        self.rx_count = self.tx_count = self.tx_operation_count = 0
         self.counts_changed.emit(0, 0, 0)
 
     def save_log(self) -> None:
         path, _ = QFileDialog.getSaveFileName(self, "保存串口日志", "serial_console_log.txt", "Text (*.txt)")
         if not path:
             return
-        lines = [f"{APP_NAME} 串口日志", f"导出时间: {datetime.now():%Y-%m-%d %H:%M:%S}", ""]
-        for stamp, kind, text, hex_data in self._log_entries:
-            payload = format_hex(hex_data) if hex_data is not None else text
-            lines.extend((f"[{stamp}] {kind}", payload, ""))
+        lines = [
+            f"{APP_NAME} {APP_VERSION} 串口日志",
+            f"导出时间: {datetime.now():%Y-%m-%d %H:%M:%S}",
+        ]
+        if self._last_settings is not None:
+            settings = self._last_settings
+            lines.extend((
+                f"端口: {settings.port}",
+                "串口参数: "
+                f"{settings.baudrate} baud, {settings.bytesize} data bits, "
+                f"{settings.stopbits:g} stop bits, parity={settings.parity}, "
+                f"rtscts={settings.rtscts}",
+            ))
+        else:
+            lines.append("串口参数: 本会话尚未建立连接")
+        lines.append("")
+        for stamp, kind, text, raw_data, _show_hex in self._log_entries:
+            lines.append(f"[{stamp}] {kind}")
+            if raw_data is not None:
+                lines.extend((f"HEX: {format_hex(raw_data)}", f"TEXT: {text}"))
+            else:
+                lines.append(text)
+            lines.append("")
         try:
             Path(path).write_text("\n".join(lines), encoding="utf-8")
         except OSError as exc:
             QMessageBox.warning(self, "保存失败", str(exc))
 
-    def shutdown(self) -> None:
+    def shutdown(self) -> bool:
         self._stop_periodic()
-        self.worker.shutdown()
+        stopped = self.worker.shutdown()
+        if not stopped:
+            text = "串口线程未能在超时内退出。"
+            self.status_changed.emit(text)
+            self.log("ERROR", text)
+        return stopped
 
 
 class SerialConsoleWindow(FramelessWindow):
@@ -489,5 +555,7 @@ class SerialConsoleWindow(FramelessWindow):
         self.content_layout.addWidget(box)
 
     def closeEvent(self, event) -> None:
-        self.panel.shutdown()
+        if not self.panel.shutdown():
+            event.ignore()
+            return
         super().closeEvent(event)

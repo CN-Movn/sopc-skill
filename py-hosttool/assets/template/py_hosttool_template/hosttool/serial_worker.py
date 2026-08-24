@@ -12,6 +12,11 @@ from PySide6.QtCore import QThread, Signal
 from serial.tools import list_ports
 
 
+COMMAND_QUEUE_SIZE = 256
+SEND_BATCH_SIZE = 32
+DEFAULT_WRITE_TIMEOUT = 0.5
+
+
 @dataclass(frozen=True)
 class SerialSettings:
     port: str
@@ -20,6 +25,7 @@ class SerialSettings:
     stopbits: float = 1.0
     parity: str = "N"
     rtscts: bool = False
+    write_timeout: float | None = DEFAULT_WRITE_TIMEOUT
 
 
 def port_sort_key(device: str) -> tuple[int, int | str]:
@@ -36,48 +42,88 @@ class SerialWorker(QThread):
     opened = Signal(str)
     closed = Signal()
     error = Signal(str)
+    command_rejected = Signal(str)
     sent = Signal(bytes)
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent=None, *, queue_size: int = COMMAND_QUEUE_SIZE) -> None:
         super().__init__(parent)
-        self._commands: queue.Queue[tuple[str, object | None]] = queue.Queue()
+        if queue_size <= 0:
+            raise ValueError("queue_size must be positive")
+        self._controls: queue.SimpleQueue[tuple[str, object | None]] = queue.SimpleQueue()
+        self._sends: queue.Queue[bytes] = queue.Queue(maxsize=queue_size)
         self._stop = Event()
         self._serial: serial.Serial | None = None
 
-    def open_port(self, settings: SerialSettings) -> None:
-        self._commands.put(("open", settings))
+    def open_port(self, settings: SerialSettings) -> bool:
+        self._controls.put(("open", settings))
+        return True
 
-    def close_port(self) -> None:
-        self._commands.put(("close", None))
+    def close_port(self) -> bool:
+        self._controls.put(("close", None))
+        return True
 
-    def send(self, data: bytes) -> None:
-        self._commands.put(("send", bytes(data)))
+    def send(self, data: bytes) -> bool:
+        try:
+            self._sends.put_nowait(bytes(data))
+        except queue.Full:
+            self.command_rejected.emit("串口发送队列已满，请稍后重试。")
+            return False
+        return True
 
-    def shutdown(self) -> None:
+    def shutdown(self, timeout_ms: int = 1500) -> bool:
+        if timeout_ms < 0:
+            raise ValueError("timeout_ms must be non-negative")
         self._stop.set()
-        self._commands.put(("close", None))
-        self.wait(1500)
+        if not self.isRunning():
+            return True
+        return bool(self.wait(timeout_ms))
 
     def _close(self) -> None:
-        if self._serial is None:
+        serial_port = self._serial
+        if serial_port is None:
             return
-        try:
-            self._serial.close()
-        except serial.SerialException:
-            pass
         self._serial = None
+        try:
+            serial_port.close()
+        except Exception as exc:
+            self.error.emit(f"关闭串口失败：{exc}")
         self.closed.emit()
 
-    def _process_commands(self) -> None:
+    def _discard_pending_sends(self) -> None:
         while True:
             try:
-                kind, value = self._commands.get_nowait()
+                self._sends.get_nowait()
             except queue.Empty:
                 return
+
+    def _write(self, value: bytes) -> None:
+        if self._serial is None or not self._serial.is_open:
+            self.error.emit("串口未打开，请先打开串口。")
+            self._discard_pending_sends()
+            return
+        try:
+            written = self._serial.write(value)
+            if written != len(value):
+                raise serial.SerialException(f"只写入 {written}/{len(value)} 字节")
+            self.sent.emit(value)
+        except Exception as exc:
+            self.error.emit(f"串口发送失败：{exc}")
+            self._close()
+            self._discard_pending_sends()
+
+    def _process_commands(self) -> None:
+        # Lifecycle controls cannot be starved by a burst of periodic sends.
+        while not self._stop.is_set():
+            try:
+                kind, value = self._controls.get_nowait()
+            except queue.Empty:
+                break
             if kind == "close":
+                self._discard_pending_sends()
                 self._close()
             elif kind == "open":
                 assert isinstance(value, SerialSettings)
+                self._discard_pending_sends()
                 self._close()
                 try:
                     self._serial = serial.Serial(
@@ -88,22 +134,24 @@ class SerialWorker(QThread):
                         parity=value.parity,
                         rtscts=value.rtscts,
                         timeout=0.05,
+                        write_timeout=value.write_timeout,
                     )
                     self._serial.reset_input_buffer()
                     self.opened.emit(value.port)
-                except serial.SerialException as exc:
-                    self._serial = None
+                except Exception as exc:
                     self.error.emit(f"打开串口失败：{exc}")
-            elif kind == "send":
-                assert isinstance(value, bytes)
-                if self._serial is None or not self._serial.is_open:
-                    self.error.emit("串口未打开，请先打开串口。")
-                    continue
-                try:
-                    self._serial.write(value)
-                    self.sent.emit(value)
-                except serial.SerialException as exc:
-                    self.error.emit(f"串口发送失败：{exc}")
+                    self._close()
+
+        for _ in range(SEND_BATCH_SIZE):
+            if self._stop.is_set():
+                return
+            try:
+                value = self._sends.get_nowait()
+            except queue.Empty:
+                break
+            self._write(value)
+            if self._serial is None:
+                break
 
     def run(self) -> None:
         while not self._stop.is_set():
@@ -113,7 +161,7 @@ class SerialWorker(QThread):
                     data = self._serial.read(self._serial.in_waiting or 1)
                     if data:
                         self.received.emit(data)
-                except serial.SerialException as exc:
+                except Exception as exc:
                     self.error.emit(f"串口接收异常：{exc}")
                     self._close()
             else:

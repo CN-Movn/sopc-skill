@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+
+## [1.2.2] - 2026-08-24
+
+### Added
+
+- 增加 staging/生成标记保护的 bootstrap 路径与纯 Python 回归测试。
+- 为模板补充 `--smoke-test` 入口，并把 frozen smoke 纳入交付验证路径。
+
+### Changed
+
+- 收紧 bootstrap 的 `--force` 安全边界，安全注入应用名、版本和显式确认的初始波特率，生成后执行无字节码 AST 语法检查。
+- 串口模板增加有界发送队列、控制命令优先级、写超时、部分写检查、异常关闭和可验证 shutdown。
+- 默认构建先验证 onedir；同时明确模板、来源工程、transport/parser/client 的复用边界，并补充严格验证要求。
+
+### Fixed
+
+- ASCII/HEX 日志始终保留原始 bytes，并将通用串口计数明确为 TX 操作次数。
+
 ## 1.2.1 - 2026-08-07
 
 - 将当前 `py-hosttool` 发布版本更新为 `v1.2.1`；其余功能内容保持不变。

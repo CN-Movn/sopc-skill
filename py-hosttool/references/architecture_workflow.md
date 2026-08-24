@@ -9,6 +9,7 @@ project/
 │  ├─ config.py             # 名称、版本、默认参数
 │  ├─ theme.py              # 颜色与 QSS
 │  ├─ window_chrome.py      # 无边框外壳
+│  ├─ transport.py          # 可选的 byte-channel 契约；串口是其中一种实现
 │  ├─ serial_worker.py      # 串口线程
 │  ├─ serial_console.py     # 通用串口 UI
 │  ├─ protocol.py           # 纯函数/流解析
@@ -27,6 +28,8 @@ project/
 
 小工具可以合并部分文件，但协议纯逻辑、串口线程和 GUI 至少要分开。
 
+默认资产只覆盖串口 byte channel。TCP、UDP 或文件回放只有在项目明确需要并实现同一 transport 契约时才纳入；不能把串口的连接灯、端口参数或阻塞模型直接套到其他传输。
+
 ## 2. 分层职责
 
 ### GUI
@@ -44,6 +47,8 @@ project/
 - 流式提取；
 - 纯函数优先，便于 pytest。
 
+协议文档、RTL/固件定义或用户确认的抓包说明必须指定为 source of truth。实现前记录帧长度字段语义、最大帧长、字节序和完整 checksum/CRC 参数（覆盖范围、poly、init、refin/refout、xorout、结果字节序），并为每类帧保存 golden vectors。来源工程只能提供代码形状，不能提供新项目字段事实。
+
 ### client
 
 - sequence 分配；
@@ -52,6 +57,8 @@ project/
 - 响应匹配；
 - 主动事件分流；
 - 断连时清空 pending。
+
+request 身份至少由 `(connection_generation, sequence)` 组成；sequence 回绕时不能覆盖仍 pending 的请求。超时、取消、断连和响应只能完成同一个 request 一次，迟到响应必须丢弃或作为诊断事件记录。自动重试只允许明确幂等的读取/查询，或协议提供去重键；写寄存器、脉冲和其他不可幂等命令必须禁止自动重放。并发数量、设备忙重试窗口和 response/主动上报的分流规则应写入 client 契约。
 
 ### services
 
@@ -73,6 +80,21 @@ project/
 - 差分计数考虑回绕和 reset；
 - 配置/清统计后 invalidates baseline；
 - 模型与 view 分离，便于无 GUI 测试。
+
+services、client、protocol 和 models 不应依赖具体窗口类；GUI 通过公开接口、signals 和注入的 fake transport/client 使用它们。至少明确允许的依赖方向，避免 service 绕过 client 直接写串口，或 model 读取控件状态。
+
+## 2.1 Transport 与线程生命周期契约
+
+byte-channel 至少定义 `open(settings) -> opened/error`、`read -> bytes`、`write(bytes)`、`close` 和 `shutdown` 的语义；调用方不得直接持有串口对象。串口实现可以使用 `SerialWorker + queue.Queue + Qt signals`，但必须满足：
+
+- worker 只在自身线程创建、读写和关闭底层句柄；GUI 只提交命令并接收 signals；
+- `start/open/close/shutdown` 幂等，命令顺序可解释；断连时拒绝或清理待发送项，周期发送和刷新任务先停止；
+- 阻塞读取有有限超时或可唤醒机制，shutdown 发送关闭命令并在有界时间内确认线程停止；超时必须报告，不得依赖进程退出清理；
+- opened/received/sent/error/closed 等异步结果带 connection generation，或由唯一 adapter 在边界处补齐；旧连接和已取消流程的回调不得触发新状态；
+- 命令队列有明确的背压/丢弃策略，控制命令不会被无限周期发送饿死；写入、读取和关闭异常收敛到单一断连路径；
+- transport 可由 fake/loopback 实现替换，以便测试半帧、断连、超时、迟到响应和关闭。
+
+这些是生命周期不变量，不要求所有项目使用相同的 QThread 组织方式；若采用 QObject moved-to-QThread 或其他实现，也必须满足相同的所有权、唤醒、generation 和停止语义。
 
 ## 3. 自动流程原则
 

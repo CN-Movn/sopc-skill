@@ -88,7 +88,7 @@ class WorkbenchWindow(FramelessWindow):
         self.version_label = QLabel(f"{APP_NAME} {APP_VERSION}")
         self.rx_label = QLabel("RX: 0")
         self.tx_label = QLabel("TX: 0")
-        self.frame_label = QLabel("帧数: 0")
+        self.frame_label = QLabel("TX 次数: 0")
         self.status_label = QLabel("状态: 就绪")
         reset = QPushButton("复位计数")
         reset.clicked.connect(self.serial_panel.reset_counts)
@@ -111,10 +111,10 @@ class WorkbenchWindow(FramelessWindow):
     def _set_status(self, text: str) -> None:
         self.status_label.setText(f"状态: {text}")
 
-    def _set_counts(self, rx: int, tx: int, frames: int) -> None:
+    def _set_counts(self, rx: int, tx: int, tx_operations: int) -> None:
         self.rx_label.setText(f"RX: {rx}")
         self.tx_label.setText(f"TX: {tx}")
-        self.frame_label.setText(f"帧数: {frames}")
+        self.frame_label.setText(f"TX 次数: {tx_operations}")
 
     def open_child(self) -> None:
         child = SerialConsoleWindow(group=self.window_group, parent=self)
@@ -128,8 +128,12 @@ class WorkbenchWindow(FramelessWindow):
 
     def closeEvent(self, event) -> None:
         for child in list(self.child_windows):
-            child.close()
-        self.serial_panel.shutdown()
+            if not child.close():
+                event.ignore()
+                return
+        if not self.serial_panel.shutdown():
+            event.ignore()
+            return
         super().closeEvent(event)
 
 

@@ -2,7 +2,8 @@
 """Validate Agent Skill metadata, structure, artifacts and template syntax."""
 from __future__ import annotations
 
-import compileall
+import argparse
+import ast
 import importlib.util
 import os
 import re
@@ -12,9 +13,12 @@ import sys
 import tempfile
 from pathlib import Path
 
+from validate_version import validate as validate_version_metadata
+
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = (
+    "VERSION",
     "SKILL.md",
     "README.md",
     "CHANGELOG.md",
@@ -28,12 +32,22 @@ REQUIRED = (
     "references/verification_and_delivery.md",
     "references/asset_catalog.md",
     "assets/template/py_hosttool_template/main.py",
+    "assets/template/py_hosttool_template/HostTool.spec",
+    "assets/template/py_hosttool_template/build.bat",
+    "assets/template/py_hosttool_template/hosttool/config.py",
+    "assets/template/py_hosttool_template/hosttool/serial_worker.py",
+    "assets/template/py_hosttool_template/hosttool/serial_console.py",
+    "assets/template/py_hosttool_template/tests/test_helpers.py",
     "assets/template/py_hosttool_template/tests/test_gui_smoke.py",
     "scripts/bootstrap_project.py",
+    "scripts/tests/test_bootstrap_project.py",
 )
 FORBIDDEN_DIRS = {"__pycache__", ".pytest_cache", "build", "release", "dist"}
 FORBIDDEN_SUFFIXES = {".exe", ".pyc", ".pyo", ".log"}
-KNOWN_PLACEHOLDERS = ("{{APP_NAME}}", "{{APP_VERSION}}", "{{EXE_NAME}}", "{{LAYOUT}}")
+KNOWN_PLACEHOLDERS = (
+    "{{APP_NAME}}", "{{APP_VERSION}}", "{{EXE_NAME}}", "{{LAYOUT}}",
+    "{{APP_NAME_LITERAL}}", "{{APP_VERSION_LITERAL}}", "{{DEFAULT_BAUDRATE}}",
+)
 GENERATED_PROJECT_RESIDUES = ("MasterController_v1.4", "ArqMinSystem_v1.1")
 NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
@@ -59,15 +73,26 @@ def _clean_caches(root: Path) -> None:
         shutil.rmtree(cache, ignore_errors=True)
 
 
-def _validate_generated_projects(errors: list[str], notes: list[str]) -> None:
+def _validate_python_syntax(root: Path, label: str, errors: list[str]) -> None:
+    """Parse Python sources and PyInstaller specs without writing bytecode."""
+    paths = [*root.rglob("*.py"), *root.rglob("*.spec")]
+    for path in paths:
+        try:
+            ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except (OSError, SyntaxError, UnicodeError) as exc:
+            errors.append(f"{label} Python syntax failed: {path.relative_to(root)}: {exc}")
+
+
+def _validate_generated_projects(errors: list[str], notes: list[str],
+                                 skipped: list[str]) -> None:
     bootstrap = ROOT / "scripts" / "bootstrap_project.py"
     runtime_modules = ("PySide6", "serial", "pytest")
     missing_runtime = [name for name in runtime_modules if importlib.util.find_spec(name) is None]
     run_gui_tests = not missing_runtime
     if missing_runtime:
-        notes.append(
-            "generated GUI pytest skipped: missing dependencies: " + ", ".join(missing_runtime)
-        )
+        reason = "generated GUI pytest skipped: missing dependencies: " + ", ".join(missing_runtime)
+        notes.append(reason)
+        skipped.append(reason)
 
     with tempfile.TemporaryDirectory(prefix="py-hosttool-validate-") as temp:
         temp_root = Path(temp)
@@ -78,6 +103,7 @@ def _validate_generated_projects(errors: list[str], notes: list[str]) -> None:
                     sys.executable, str(bootstrap), str(destination),
                     "--app-name", f"Validation-{layout}",
                     "--version", "9.9.9",
+                    "--baudrate", "115200",
                     "--layout", layout,
                 ],
                 text=True,
@@ -103,13 +129,12 @@ def _validate_generated_projects(errors: list[str], notes: list[str]) -> None:
                         f"source-project residue in generated {layout}: "
                         f"{path.relative_to(destination)} -> {', '.join(residues)}"
                     )
-            if not compileall.compile_dir(destination, quiet=1, force=True):
-                errors.append(f"generated {layout} Python syntax check failed")
+            _validate_python_syntax(destination, f"generated {layout}", errors)
             if run_gui_tests:
                 env = os.environ.copy()
-                env.setdefault("QT_QPA_PLATFORM", "offscreen")
+                env["QT_QPA_PLATFORM"] = "offscreen"
                 proc = subprocess.run(
-                    [sys.executable, "-m", "pytest", "-q"],
+                    [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"],
                     cwd=destination, env=env, text=True, capture_output=True, check=False,
                 )
                 if proc.returncode:
@@ -120,12 +145,35 @@ def _validate_generated_projects(errors: list[str], notes: list[str]) -> None:
             _clean_caches(destination)
 
 
+def _validate_bootstrap_tests(errors: list[str], notes: list[str]) -> None:
+    env = os.environ.copy()
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    proc = subprocess.run(
+        [sys.executable, "-B", "-m", "unittest", "discover", "-s", "scripts/tests", "-v"],
+        cwd=ROOT, env=env, text=True, capture_output=True, check=False,
+    )
+    if proc.returncode:
+        output = proc.stdout.strip() or proc.stderr.strip()
+        errors.append(f"bootstrap regression tests failed: {output[-2000:]}")
+    else:
+        notes.append("bootstrap regression tests passed")
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Validate the py-hosttool skill package")
+    parser.add_argument(
+        "--strict", action="store_true",
+        help="return a non-zero status when runtime or reference checks are skipped",
+    )
+    args = parser.parse_args()
     errors: list[str] = []
     notes: list[str] = []
+    skipped: list[str] = []
     for rel in REQUIRED:
         if not (ROOT / rel).is_file():
             errors.append(f"missing: {rel}")
+
+    errors.extend(validate_version_metadata(ROOT))
 
     if (ROOT / "reference").exists():
         errors.append("legacy singular directory exists: reference/ (use references/)")
@@ -174,10 +222,10 @@ def main() -> int:
     else:
         errors.append("missing: manifest.txt")
 
-    if not compileall.compile_dir(ROOT / "assets" / "template", quiet=1, force=True):
-        errors.append("template Python syntax check failed")
-    _clean_caches(ROOT / "assets" / "template")
-    _validate_generated_projects(errors, notes)
+    _validate_python_syntax(ROOT / "assets" / "template", "template", errors)
+    _validate_python_syntax(ROOT / "scripts", "scripts", errors)
+    _validate_bootstrap_tests(errors, notes)
+    _validate_generated_projects(errors, notes, skipped)
 
     # Agent Skills recommends the external `skills-ref validate` command.
     # Use it when installed, but keep this skill self-validating in minimal
@@ -193,7 +241,9 @@ def main() -> int:
         else:
             notes.append("skills-ref validation passed")
     else:
-        notes.append("skills-ref validation skipped: CLI not installed")
+        reason = "skills-ref validation skipped: CLI not installed"
+        notes.append(reason)
+        skipped.append(reason)
 
     for note in notes:
         print(note)
@@ -203,6 +253,12 @@ def main() -> int:
         for error in errors:
             print(f"- {error}")
         return 1
+    if skipped:
+        print("py-hosttool structural validation passed with skipped checks")
+        if args.strict:
+            print("Strict validation failed because one or more checks were skipped")
+            return 2
+        return 0
     print("py-hosttool validation passed")
     return 0
 

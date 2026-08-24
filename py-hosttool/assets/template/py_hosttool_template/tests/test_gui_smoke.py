@@ -28,6 +28,8 @@ def test_public_main_window_constructs_and_closes():
         assert window.minimumWidth() >= 1440
     window.close()
     app.processEvents()
+    if DEFAULT_LAYOUT == "workbench":
+        assert not window.serial_panel.worker.isRunning()
 
 
 def test_workbench_serial_asset_regressions():
@@ -36,7 +38,7 @@ def test_workbench_serial_asset_regressions():
     app, window = _make_window()
     panel = window.serial_panel
 
-    # Mature MasterController color semantics: gray header, RX green, TX blue.
+    # Established serial-log contract: gray header, RX green, TX blue.
     panel._append_log_entry("RX", "", b"\x01\x02")
     panel._append_log_entry("TX", "", b"\x03\x04")
     html = panel.log_view.toHtml().lower()
@@ -72,3 +74,4 @@ def test_workbench_serial_asset_regressions():
 
     window.close()
     app.processEvents()
+    assert not panel.worker.isRunning()
