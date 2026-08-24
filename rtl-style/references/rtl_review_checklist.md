@@ -65,3 +65,12 @@
 - [ ] high fanout 只在静态阶段称为 candidate；实际影响用 `report_high_fanout_nets` 验证。
 - [ ] deep cone 只在静态阶段称为 risk；实际 logic level 用 `report_design_analysis` / logic-level distribution 验证。
 - [ ] 不用 false path / multicycle / implementation directive 掩盖没有解释清楚的 RTL 结构问题。
+
+## H. 功能验证与交付证据
+
+- [ ] 已确认本次修改的功能合同、不变量、可见 latency、吞吐和 reset 行为。
+- [ ] 已运行 `check_rtl_style.py`；若未运行，交付说明中写明原因。
+- [ ] 已查找并优先复用项目现有 lint、testbench、仿真或回归入口，没有用静态 checker 代替功能验证。
+- [ ] 针对改动覆盖 reset、连续事务、停顿/恢复、边界值和异常路径；AXIS 还覆盖 backpressure 下 payload/sideband 稳定及 `tlast` 边界。
+- [ ] counter/FSM/RAM/FIFO/DSP/CDC 按适用范围验证 off-by-one、非法/恢复状态、读写延迟或冲突语义、位宽/符号以及跨域事件不会丢失/重复；静态或普通仿真不能证明的 CDC 性质明确保留为验证边界。
+- [ ] 交付结果逐层标明实际完成的 checker、lint/elaboration、simulation、synthesis、implementation、timing、CDC 和硬件验证，不把较低层级结果升级表述。

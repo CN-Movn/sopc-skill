@@ -15,6 +15,8 @@ from typing import Iterable
 
 CHINESE_RE = re.compile(r"[\u4e00-\u9fff]")
 MODULE_RE = re.compile(r"^\s*module\s+([A-Za-z_][A-Za-z0-9_$]*)\b", re.M)
+ALWAYS_RE = re.compile(r"\balways\s*@|\balways_(?:comb|ff|latch)\b")
+VERILOG_SUFFIXES = {".v", ".sv"}
 REQUIRED_HEADER_FIELDS = (
     "模块名称",
     "功能说明",
@@ -32,68 +34,168 @@ def iter_verilog_paths(items: Iterable[str]) -> list[Path]:
     for item in items:
         path = Path(item)
         if path.is_dir():
-            result.extend(sorted(path.rglob("*.v")))
-        elif path.suffix.lower() == ".v" and path.exists():
+            result.extend(
+                sorted(
+                    candidate
+                    for candidate in path.rglob("*")
+                    if candidate.is_file() and candidate.suffix.lower() in VERILOG_SUFFIXES
+                )
+            )
+        elif path.suffix.lower() in VERILOG_SUFFIXES and path.exists():
             result.append(path)
     # Preserve order while removing duplicates.
     return list(dict.fromkeys(p.resolve() for p in result))
 
 
-def line_no(text: str, offset: int) -> int:
-    return text.count("\n", 0, offset) + 1
+def mask_comments_and_strings(text: str) -> str:
+    """Mask non-code text while preserving byte offsets and line breaks.
+
+    This is deliberately a small lexical guard for heuristics, not a Verilog parser.
+    """
+
+    output: list[str] = []
+    state = "code"
+    index = 0
+    while index < len(text):
+        char = text[index]
+        following = text[index + 1] if index + 1 < len(text) else ""
+
+        if state == "code":
+            if char == "/" and following == "/":
+                output.extend((" ", " "))
+                index += 2
+                state = "line_comment"
+                continue
+            if char == "/" and following == "*":
+                output.extend((" ", " "))
+                index += 2
+                state = "block_comment"
+                continue
+            if char == '"':
+                output.append(" ")
+                index += 1
+                state = "string"
+                continue
+            output.append(char)
+            index += 1
+            continue
+
+        if state == "line_comment":
+            output.append("\n" if char == "\n" else " ")
+            index += 1
+            if char == "\n":
+                state = "code"
+            continue
+
+        if state == "block_comment":
+            if char == "*" and following == "/":
+                output.extend((" ", " "))
+                index += 2
+                state = "code"
+                continue
+            output.append("\n" if char == "\n" else " ")
+            index += 1
+            continue
+
+        # String contents cannot contain RTL structure. Preserve escaped/newline
+        # positions so diagnostics still use the original source line numbers.
+        if char == "\\" and following:
+            output.append(" ")
+            output.append("\n" if following == "\n" else " ")
+            index += 2
+            continue
+        output.append("\n" if char == "\n" else " ")
+        index += 1
+        if char == '"':
+            state = "code"
+
+    return "".join(output)
 
 
 def preceding_comment_window(text: str, module_offset: int, max_lines: int = 30) -> str:
+    """Return the nearest module header comment, allowing blank/directive lines."""
+
     prefix_lines = text[:module_offset].splitlines()
-    return "\n".join(prefix_lines[-max_lines:])
+    collected: list[str] = []
+    saw_comment = False
+    in_block_comment = False
+    for line in reversed(prefix_lines[-max_lines:]):
+        stripped = line.strip()
+        is_line_comment = stripped.startswith("//")
+        if "*/" in stripped:
+            in_block_comment = True
+        is_comment = is_line_comment or in_block_comment
+        if "/*" in stripped and in_block_comment:
+            in_block_comment = False
+
+        if is_comment:
+            collected.append(line)
+            saw_comment = True
+            continue
+        if not stripped or (stripped.startswith("`") and not saw_comment):
+            continue
+        if stripped.startswith("`") and saw_comment:
+            continue
+        break
+    return "\n".join(reversed(collected))
 
 
-def extract_always_blocks(lines: list[str]) -> list[tuple[int, str]]:
-    blocks: list[tuple[int, str]] = []
+def keyword_count(line: str, keyword: str) -> int:
+    return len(re.findall(rf"\b{keyword}\b", line))
+
+
+def extract_always_blocks(
+    lines: list[str], code_lines: list[str]
+) -> list[tuple[int, str, str]]:
+    blocks: list[tuple[int, str, str]] = []
     i = 0
     while i < len(lines):
-        if not re.search(r"\balways\s*@", lines[i]):
+        if not ALWAYS_RE.search(code_lines[i]):
             i += 1
             continue
 
         start = i
         buf = [lines[i]]
-        depth = lines[i].count("begin") - lines[i].count("end")
+        code_buf = [code_lines[i]]
+        depth = keyword_count(code_lines[i], "begin") - keyword_count(code_lines[i], "end")
+        entered_begin = keyword_count(code_lines[i], "begin") > 0
 
-        # Single-statement always without begin/end: keep a small block.
-        if depth <= 0 and ";" in lines[i]:
-            blocks.append((start + 1, lines[i]))
+        if not entered_begin and ";" in code_lines[i]:
+            blocks.append((start + 1, lines[i], code_lines[i]))
             i += 1
             continue
-
         i += 1
         while i < len(lines):
             buf.append(lines[i])
-            depth += lines[i].count("begin") - lines[i].count("end")
-            if depth <= 0 and re.search(r"\bend\b", lines[i]):
+            code_buf.append(code_lines[i])
+            begins = keyword_count(code_lines[i], "begin")
+            ends = keyword_count(code_lines[i], "end")
+            entered_begin = entered_begin or begins > 0
+            depth += begins - ends
+            if entered_begin and depth <= 0 and ends:
+                break
+            if not entered_begin and ";" in code_lines[i]:
                 break
             i += 1
-        blocks.append((start + 1, "\n".join(buf)))
+        blocks.append((start + 1, "\n".join(buf), "\n".join(code_buf)))
         i += 1
     return blocks
 
 
-def comment_lines(text: str) -> list[str]:
-    return [line for line in text.splitlines() if "//" in line and CHINESE_RE.search(line)]
-
-
 def analyze_file(path: Path) -> tuple[list[str], list[str]]:
     text = path.read_text(encoding="utf-8", errors="replace")
+    code_text = mask_comments_and_strings(text)
     lines = text.splitlines()
+    code_lines = code_text.splitlines()
     errors: list[str] = []
     warnings: list[str] = []
 
-    if "`default_nettype none" not in text:
+    if "`default_nettype none" not in code_text:
         errors.append("缺少 `default_nettype none`。")
-    if "`default_nettype wire" not in text:
-        warnings.append("文件末尾未看到 `default_nettype wire` 恢复。")
+    if "`default_nettype wire" not in code_text:
+        warnings.append("未检测到 `default_nettype wire` 恢复指令。")
 
-    modules = list(MODULE_RE.finditer(text))
+    modules = list(MODULE_RE.finditer(code_text))
     if not modules:
         warnings.append("未检测到 module 声明。")
     for match in modules:
@@ -107,19 +209,11 @@ def analyze_file(path: Path) -> tuple[list[str], list[str]]:
         if not CHINESE_RE.search(header):
             errors.append(f"module {name} 顶部未检测到中文注释。")
 
-    # Require at least some Chinese intent comments beyond the module header for nontrivial files.
-    chinese_comments = comment_lines(text)
-    if len(lines) >= 80 and len(chinese_comments) < 10:
-        warnings.append(
-            f"文件 {len(lines)} 行，但仅检测到 {len(chinese_comments)} 行中文注释；"
-            "请确认 FSM/握手/计数/流水/CDC 等非平凡逻辑均有意图说明。"
-        )
-
-    # Nontrivial always blocks must have a nearby Chinese intent comment.
-    always_blocks = extract_always_blocks(lines)
-    for start_line, block in always_blocks:
+    # Check structural coverage, never a comment-line count or density quota.
+    always_blocks = extract_always_blocks(lines, code_lines)
+    for start_line, block, code_block in always_blocks:
         block_lines = block.splitlines()
-        nontrivial = len(block_lines) >= 6 or bool(re.search(r"\b(if|case[xz]?)\b", block))
+        nontrivial = len(block_lines) >= 6 or bool(re.search(r"\b(if|case[xz]?)\b", code_block))
         if nontrivial:
             before = "\n".join(lines[max(0, start_line - 4): start_line - 1])
             first_part = "\n".join(block_lines[:3])
@@ -129,8 +223,8 @@ def analyze_file(path: Path) -> tuple[list[str], list[str]]:
                 )
 
     # FSM/case selection should carry a nearby Chinese explanation, not only syntax.
-    for idx, line in enumerate(lines, 1):
-        if re.search(r"\bcase[xz]?\s*\(", re.sub(r"//.*", "", line)):
+    for idx, code_line in enumerate(code_lines, 1):
+        if re.search(r"\bcase[xz]?\s*\(", code_line):
             before = "\n".join(lines[max(0, idx - 4): idx])
             if not CHINESE_RE.search(before):
                 warnings.append(
@@ -138,16 +232,19 @@ def analyze_file(path: Path) -> tuple[list[str], list[str]]:
                 )
 
     # Heuristic timing-risk checks inside always blocks.
-    for start_line, block in always_blocks:
-        is_comb = bool(re.search(r"always\s*@\s*\(\s*\*\s*\)|always\s*@\s*\*", block))
+    for start_line, _block, code_block in always_blocks:
+        is_comb = bool(
+            re.search(r"always\s*@\s*\(\s*\*\s*\)|always\s*@\s*\*", code_block)
+            or re.search(r"\balways_comb\b", code_block)
+        )
         if not is_comb:
             continue
 
-        else_if_count = len(re.findall(r"\belse\s+if\b", block))
-        ternary_count = block.count("?")
-        case_count = len(re.findall(r"\bcase[xz]?\s*\(", block))
-        compare_count = len(re.findall(r"==|!=|<=|>=|(?<!<)<(?![<=])|(?<!>)>(?![>=])", block))
-        arithmetic_count = len(re.findall(r"(?<!\+)[+](?!\+)|(?<!-)-(?!-)|\*", block))
+        else_if_count = len(re.findall(r"\belse\s+if\b", code_block))
+        ternary_count = code_block.count("?")
+        case_count = len(re.findall(r"\bcase[xz]?\s*\(", code_block))
+        compare_count = len(re.findall(r"==|!=|<=|>=|(?<!<)<(?![<=])|(?<!>)>(?![>=])", code_block))
+        arithmetic_count = len(re.findall(r"(?<!\+)[+](?!\+)|(?<!-)-(?!-)|\*", code_block))
 
         if else_if_count >= 4:
             warnings.append(
@@ -168,16 +265,15 @@ def analyze_file(path: Path) -> tuple[list[str], list[str]]:
                 ternary_count > 0,
             ]
         )
-        if complexity_classes >= 3 and len(block.splitlines()) >= 18:
+        if complexity_classes >= 3 and len(code_block.splitlines()) >= 18:
             warnings.append(
                 f"L{start_line}: 同一组合块同时包含多类 decode/比较/算术/mux 操作；"
                 "按 register-to-register 路径审查，必要时拆成平衡 pipeline。[UG949-T1/T2, UG906-A1]"
             )
 
     # Direct ready-to-ready dependencies are often long backpressure paths.
-    for idx, line in enumerate(lines, 1):
-        stripped = re.sub(r"//.*", "", line)
-        m = re.search(r"\bassign\s+([A-Za-z_][A-Za-z0-9_$]*tready)\s*=\s*(.+);", stripped)
+    for idx, code_line in enumerate(code_lines, 1):
+        m = re.search(r"\bassign\s+([A-Za-z_][A-Za-z0-9_$]*tready)\s*=\s*(.+);", code_line)
         if m:
             lhs, rhs = m.group(1), m.group(2)
             ready_refs = re.findall(r"\b[A-Za-z_][A-Za-z0-9_$]*tready\b", rhs)
@@ -187,9 +283,8 @@ def analyze_file(path: Path) -> tuple[list[str], list[str]]:
                 )
 
     # Nested/long single-line ternary is easy to miss in review.
-    for idx, line in enumerate(lines, 1):
-        code = re.sub(r"//.*", "", line)
-        if code.count("?") >= 2:
+    for idx, code_line in enumerate(code_lines, 1):
+        if code_line.count("?") >= 2:
             warnings.append(
                 f"L{idx}: 单行存在嵌套三目选择；优先确认是否能用平行 case/predecode 表达。[UG901-P1]"
             )
@@ -199,9 +294,9 @@ def analyze_file(path: Path) -> tuple[list[str], list[str]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Static preflight for rtl-style Verilog comments and common timing-risk structures."
+        description="Static preflight for rtl-style Verilog/SystemVerilog comments and common timing-risk structures."
     )
-    parser.add_argument("paths", nargs="+", help="Verilog files or directories to inspect")
+    parser.add_argument("paths", nargs="+", help=".v/.sv files or directories to inspect")
     parser.add_argument(
         "--warnings-as-errors",
         action="store_true",
@@ -211,7 +306,7 @@ def main() -> int:
 
     files = iter_verilog_paths(args.paths)
     if not files:
-        print("rtl-style check: no .v files found", file=sys.stderr)
+        print("rtl-style check: no .v/.sv files found", file=sys.stderr)
         return 2
 
     error_count = 0

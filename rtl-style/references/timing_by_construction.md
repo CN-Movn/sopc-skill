@@ -40,8 +40,24 @@
 5. **ready/backpressure 会不会组合穿越多个功能块？** `[UG949-T3]`
 6. **reset/mode/flush/enable 是否驱动过多 datapath？** `[UG949-T4/T7]`
 7. **新增 pipeline 是否改变外部可见 latency？** 如果会，必须先尊重用户接口合同。
+8. **valid 与 sideband 如何逐级对齐？** stall、flush、drop、异常和 packet boundary 是否沿相同事务传播？
+9. **如何证明功能没有因拆级改变？** 写出至少覆盖 reset、连续事务、停顿/恢复和关键边界的验证场景。
 
 若目标频率未知，不要虚构 MHz；但也不能因此把所有功能挤进一个周期。
+
+对非平凡模块，在编码前形成一个简短、可复核的设计摘要。它不是长篇设计文档，至少记录：
+
+```text
+功能/接口与不变量：
+时钟、复位与 CDC：
+寄存级、吞吐与可见 latency：
+最可能的关键组合锥及切分：
+valid/sideband/packet boundary 对齐：
+RAM/DSP/FSM 等预期 inference：
+计划执行的功能验证与 Vivado 验证边界：
+```
+
+如果某项不适用，明确写“不适用”及原因；不要为了填表虚构频率、器件、约束或验证结果。
 
 ---
 

@@ -20,7 +20,7 @@ Before writing or materially modifying RTL:
 5. When diagnosing existing Vivado timing evidence, read `references/amd_ug906_timing_analysis.md`.
 6. Use `references/official_source_verification.md` for AMD/Xilinx source authenticity and version metadata. Do not invent document claims.
 7. For a new ordinary module, start from `references/verilog_module_skeleton.v`. For an AXI4-Stream registered boundary, also use `references/axis_registered_stage_template.v`.
-8. Before delivery, apply `references/rtl_review_checklist.md` and, when practical, run `scripts/check_rtl_style.py` as a static preflight.
+8. Before delivery, apply `references/rtl_review_checklist.md`. Run `scripts/check_rtl_style.py` on every new or materially changed `.v`/`.sv` file when Python and the files are available; if it cannot run, state the reason instead of silently skipping it.
 
 Use `references/amd_xilinx_official_guidance.md` as the compact index for `[UG949-*]`, `[UG901-*]`, and `[UG906-*]` rule IDs.
 
@@ -56,6 +56,7 @@ Chinese comments are mandatory, not style polish.
 - Every new RTL module, and every materially rewritten existing module, must contain the full Chinese header defined in `references/comment_contract.md`.
 - Add Chinese intent comments around nontrivial FSM/control, handshake/backpressure, counter boundaries, exception/drop paths, CDC, RAM/FIFO behavior, pipeline stages, and timing-specific implementation choices.
 - Keep identifiers in English. Comments must explain intent, boundaries, invariants, latency, or hardware consequences rather than translate syntax line by line.
+- Keep comments proportional to design risk. Do not add comments to meet a line count or density target, repeat the same statement around every assignment, or narrate obvious syntax.
 
 Missing required header fields or leaving nontrivial timing/CDC/control logic undocumented makes the module incomplete.
 
@@ -63,7 +64,7 @@ Missing required header fields or leaving nontrivial timing/CDC/control logic un
 
 Treat timing as an RTL architecture concern, not a post-implementation cleanup step.
 
-Before final coding, identify the register-stage plan, likely deepest combinational cone, large fan-in/entry-scan candidates, high-fanout controls, RAM/DSP boundaries, AXIS backpressure path, CDC boundaries, and sideband/valid signals that must remain latency-aligned. If target frequency is unknown, do not invent one; still avoid obviously deep single-cycle structures. `[UG949-T1/T2]`
+Before final coding, identify the register-stage plan, likely deepest combinational cone, large fan-in/entry-scan candidates, high-fanout controls, RAM/DSP boundaries, AXIS backpressure path, CDC boundaries, and sideband/valid signals that must remain latency-aligned. For a nontrivial change, make these decisions reviewable with a concise pre-coding design summary; do not leave them as unstated assumptions. If target frequency is unknown, do not invent one; still avoid obviously deep single-cycle structures. `[UG949-T1/T2]`
 
 The following conclusions are mandatory; detailed rationale, examples, and alternatives live in `references/timing_by_construction.md`:
 
@@ -89,14 +90,15 @@ Make clock domains explicit.
 
 ## Workflow
 
-1. **Inspect the local contract.** Determine clocks, reset, interfaces, latency, throughput, CDC boundaries, and naming style from supplied code/project; do not invent missing protocol facts.
-2. **Run the Timing Design Gate.** Use `references/timing_by_construction.md` before coding a nontrivial/high-speed path.
+1. **Inspect the local contract.** Determine clocks, reset, interfaces, latency, throughput, CDC boundaries, functional invariants, and existing verification entry points from supplied code/project; do not invent missing protocol facts.
+2. **Run the Timing Design Gate.** Use `references/timing_by_construction.md` before coding a nontrivial/high-speed path, and record the concise design summary it requires.
 3. **Choose inference intentionally.** Consult the relevant UG949/UG901 distilled reference rather than relying on software-like HDL intuition.
 4. **Write RTL with the Chinese comment contract.** Keep comments synchronized with the final implementation.
-5. **Audit before delivery.** Apply `references/rtl_review_checklist.md` and run `scripts/check_rtl_style.py` when practical.
-6. **Do not run expensive verification by default.** Static checks are allowed; do not run Vivado synthesis/implementation or long simulations unless the user explicitly asks or the task requires it.
-7. **When Vivado evidence exists, diagnose with UG906.** Separate logic-depth, fanout, routing/physical-delay, and constraint problems before recommending RTL changes.
-8. **Report verification honestly.** Static review is not timing signoff.
+5. **Run the static preflight.** Apply `references/rtl_review_checklist.md` and run `scripts/check_rtl_style.py` on changed RTL when the local environment permits. Treat its findings as prompts for review, not parser or timing results.
+6. **Pass the functional verification gate.** Reuse existing project lint, testbench, or simulation entry points when they are available, relevant, and within task scope. Exercise the changed contract and boundary cases; if execution is unavailable, list the unrun scenarios and do not claim functional verification.
+7. **Escalate verification proportionally.** Do not launch expensive Vivado synthesis/implementation or long simulations merely because the Skill was invoked. Run them when the user requests them or the task's acceptance criteria require them, using the real top, part, constraints, and project flow.
+8. **When Vivado evidence exists, diagnose with UG906.** Separate logic-depth, fanout, routing/physical-delay, and constraint problems before recommending RTL changes.
+9. **Report verification honestly.** Distinguish static review, lightweight checker, lint/elaboration, simulation, synthesis, implementation, timing analysis, CDC analysis, and hardware validation.
 
 ## Vivado evidence boundary
 
@@ -123,4 +125,6 @@ Use Chinese by default for explanations. For AXIS, CDC, FIFO/RAM, multiple clock
 - 主动规避的时序风险及相关 `[UG949-*] / [UG901-*]` 规则；
 - 完整 Verilog 代码或明确 patch；
 - 建议的仿真场景；
+- 实际运行的检查、命令/入口和结果；
+- 未运行或无法运行的验证层级及剩余风险；
 - 若未运行 Vivado，明确写“未验证综合/实现/时序”。
