@@ -30,3 +30,7 @@ build.bat
 目标机人工检查；只有 onedir 在目标环境验证通过后，才根据交付需求另行制作 onefile。
 
 默认入口布局由 `main.py` 决定。业务协议、寄存器和设备工作流需要按项目事实实现。
+
+`hosttool/recording.py` 提供不依赖具体协议的 `CaptureEntry`、后台有界
+JSONL/CSV 记录器和只读回放器。业务层负责定义通道、解析摘要和脱敏规则；
+原始 payload bytes 必须保持无损。

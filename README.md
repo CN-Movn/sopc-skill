@@ -2,28 +2,25 @@
 
 # sopc-skill ⚙️
 
-### 让 AI 更懂 FPGA 工程，也更懂工具开发与 Agent 协作边界
+### 面向 SoPC / FPGA / 嵌入式工程的 AI Skill 集合
 
-面向真实 SoPC / FPGA / 嵌入式开发流程沉淀的自定义 AI Skill 集合。
-
-不是让 AI “多写一点代码”，而是把**真实工程里反复验证过的方法、约束、模板、检查脚本和协作边界**固化下来，让 ChatGPT / Codex 等 coding agent 更稳定地参与工程开发。
+把真实工程中反复验证过的约束、模板、检查脚本和复用边界沉淀为 coding agent 可执行的能力。
 
 <p>
   <img src="https://img.shields.io/badge/Domain-SoPC%20%2F%20FPGA-4c78a8?style=flat-square" alt="Domain">
   <img src="https://img.shields.io/badge/RTL-Vivado%20%2F%20Verilog-2f855a?style=flat-square" alt="RTL">
   <img src="https://img.shields.io/badge/HostTool-PySide6-7b61ff?style=flat-square" alt="Host Tool">
-  <img src="https://img.shields.io/badge/Agent-Codex%20%2F%20DeepSeek-a35ac7?style=flat-square" alt="Agent">
-  <img src="https://img.shields.io/badge/Status-Active-555?style=flat-square" alt="Status">
+  <img src="https://img.shields.io/badge/Agent-Codex-a35ac7?style=flat-square" alt="Agent">
+  <img src="https://img.shields.io/badge/Release-v0.1.5-555?style=flat-square" alt="Release">
 </p>
 
 <p>
   <a href="#-为什么有这个仓库">为什么有这个仓库</a> ·
   <a href="#-当前-skill">当前 Skill</a> ·
-  <a href="#-rtl-style--让-ai-写出更像工程代码的-rtl">rtl-style</a> ·
-  <a href="#-py-hosttool--把成熟上位机设计语言真正复用起来">py-hosttool</a> ·
-  <a href="#-deepseek-subagent--让-codex-拥有可持续复用的低成本子-agent">deepseek-subagent</a> ·
+  <a href="#-rtl-style">rtl-style</a> ·
+  <a href="#-py-hosttool">py-hosttool</a> ·
   <a href="#-使用方式">使用方式</a> ·
-  <a href="#-安全与边界">安全与边界</a>
+  <a href="#-验证与发布">验证与发布</a>
 </p>
 
 </div>
@@ -32,156 +29,68 @@
 
 ## ✨ 为什么有这个仓库
 
-`sopc-skill` 面向 **FPGA / SoPC / 嵌入式板卡开发与 AI coding agent 协作**。
+真实硬件工程的难点不只在生成代码，而在保持协议、时序、验证和交付边界的一致：
 
-真实硬件工程里，真正昂贵的从来不只是“把代码写出来”，而是：
+- RTL 要兼顾可综合语义、CDC、握手、时序结构、资源推断和可维护性；
+- 上位机要把串口或字节通道、协议解析、GUI 生命周期、日志、记录与交付拆清楚；
+- 没有实际运行过的仿真、综合、GUI、设备联调和打包，不能声称已经验证；
+- 成熟经验应当转成模板、检查器和按需加载的 reference，避免每次从零重复。
 
-- 不虚构协议、寄存器、时钟、复位和性能事实；
-- 不破坏已经验证过的接口和链路；
-- 知道 AXI4-Stream、CDC、pipeline、RAM/DSP inference、timing closure 真正危险在哪里；
-- 写出来的 RTL 不只是“语法正确”，还要更容易综合、评审、验证和上板；
-- 上位机不能只是一次性脚本，要有稳定的窗口、日志、串口、线程和交付结构；
-- 多 Agent 不能只会“新建—用完—关闭”，还要考虑上下文复用、成本和长期协作；
-- 没有实际跑过仿真、综合、实现、GUI、串口或端到端测试时，不能假装已经验证通过。
-
-这个仓库做的事情，就是把这些经验变成 AI 可以稳定执行的 **Skill、reference、模板、脚本和运行时能力**。
-
-> **核心目标：让 AI 从“会生成代码”更进一步，变成“更懂工程约束、更懂复用、更懂边界的协作工具”。**
-
----
+这个仓库目前维护两个相互独立、可以单独安装的 Skill。
 
 ## 🚀 当前 Skill
 
-| Skill | 当前版本 | 主要解决什么问题 | 核心优势 |
+本仓库当前统一发布版本为 **`0.1.5`**。
+
+| Skill | 版本 | 适用任务 | 主要资产 |
 | :--- | :---: | :--- | :--- |
-| [`rtl-style`](./rtl-style) | **v2.2.2** | AI 写 RTL 容易只顾功能、忽略时序/CDC/可维护性 | 中文注释硬约束、Timing by Construction、AMD 官方方法论、静态 checker、RTL 模板 |
-| [`py-hosttool`](./py-hosttool) | **v1.2.2** | Python 上位机项目经常从零搭壳、重复踩 GUI/串口/线程坑 | 复用成熟 PySide6 设计语言、完整模板、参考工程、串口资产、窗口框架与交付流程 |
-| [`deepseek-subagent`](./deepseek-subagent) | **v1.7.3** | Codex 子 Agent 成本高、重复扫代码、跨进程连续性与 handoff 权限容易踩坑 | 固定 DeepSeek 路由、V1 fail-closed、一键 bootstrap、持久 handoff 与 successor 连续性 |
+| [`rtl-style`](./rtl-style) | **0.1.5** | 创建、修改、重构或评审 AMD/Xilinx Vivado Verilog RTL | 中文注释合同、Timing by Construction、AMD UG901/UG906/UG949 方法、RTL 模板、静态 checker |
+| [`py-hosttool`](./py-hosttool) | **0.1.5** | 创建、改造、测试和打包 FPGA / SoPC / 嵌入式板卡 PySide6 上位机 | 无边框窗口、仪表盘/工作台布局、串口线程与日志、通用记录/回放、模板、参考工程、验证与打包规则 |
 
-各 Skill 根目录的 `VERSION` 是当前版本的权威来源；仓库根目录的版本表由 `scripts/validate_release_versions.py` 做一致性校验，避免发布后根 README 漏同步。
+各 Skill 根目录的 `VERSION` 是当前版本的机器可读来源。根 README、Skill README 和 CHANGELOG 的一致性由仓库级脚本检查。
 
-三者分别对应一个真实工程链条：
-
-```text
-RTL / FPGA 设计
-      ↓
-上位机 / 调试工具
-      ↓
-AI 多 Agent 协作与成本控制
-```
-
-它们不是彼此孤立的 Prompt，而是尽量把一套真实工程工作方式沉淀成可复用资产。
+`deepseek-subagent` 已停止维护并从当前仓库移除；旧安装应直接卸载，不再依赖其本地 bridge、credential 或 handoff 状态。
 
 ---
 
-## 🧠 rtl-style —— 让 AI 写出更像工程代码的 RTL
+## 🧠 rtl-style
 
-[`rtl-style`](./rtl-style) 面向 **Vivado / Verilog RTL 创建、修改和评审**，重点不是“语法能过”，而是让 AI 更早考虑时序、CDC、握手、资源推断和可维护性。
+[`rtl-style`](./rtl-style) 面向 Vivado / Verilog RTL 创建、修改和评审，重点让 AI 在编码前处理真正影响工程的约束。
 
-### 🌟 核心卖点
+- **注释硬合同**：模块头、FSM、握手、CDC、计数边界和 pipeline 必须说明设计意图。
+- **Timing by Construction**：先识别深组合逻辑、高扇出、优先级链、RAM/DSP 和 backpressure 风险。
+- **官方方法论落地**：把 AMD UG949、UG901、UG906 中可执行的规则映射成 reference 和 checker 提示。
+- **模板与 preflight**：提供普通模块、AXI4-Stream registered stage 模板和 Python 静态检查器。
+- **诚实验证**：静态检查、lint、仿真、综合、实现和上板结果分别报告。
 
-- **中文注释 Hard Contract**：模块头、FSM、handshake、CDC、pipeline 等关键结构必须说明设计意图。
-- **Timing by Construction**：编码前识别深组合、priority、fan-in/fanout、ready chain、RAM/DSP 和 pipeline 风险，而不是等 WNS 出问题再补救。
-- **AMD 官方方法论落地**：把 UG949 / UG901 / UG906 中与 RTL 结构、综合推断、时序分析相关的原则转成可执行规则。
-- **Checker + RTL 模板**：`check_rtl_style.py` 做低成本静态 preflight，并提供 AXIS registered stage、module skeleton 等可直接复用模板。
-- **Progressive Disclosure**：核心约束留在 `SKILL.md`，详细依据和反例按需加载，减少上下文浪费。
+适合 AXI4-Stream、FSM、scheduler、RAM/FIFO、DSP、CDC、reset、packet/video datapath 等 RTL 工作。
 
-适合 AXI4-Stream、FSM / scheduler、RAM / DSP / pipeline、CDC / reset，以及现有 RTL 的工程化 review。
+## 🖥️ py-hosttool
 
----
+[`py-hosttool`](./py-hosttool) 面向 FPGA / SoPC / 嵌入式板卡的 PySide6 上位机。设计输入来自多套实际工具，包括串口协议工作台、设备诊断仪表盘和带离线记录/回放机制的 CAN 上位机。
 
-## 🖥️ py-hosttool —— 把成熟上位机设计语言真正复用起来
+- **成熟外壳**：无边框 Windows 标题栏、置顶、最大化/还原、拖动和边缘缩放。
+- **两类布局**：设备诊断仪表盘与协议/串口工作台。
+- **线程所有权的串口层**：GUI 不直接阻塞读写，串口句柄由 worker 持有，控制命令优先，队列有界。
+- **协议与恢复边界**：分段/粘包、CRC 参数、generation、超时、迟到响应和不可幂等命令不自动重发。
+- **通用记录/回放资产**：后台有界写入 JSONL + CSV，按方向回放，便于无设备复现问题。
+- **验证到交付**：协议 golden vectors、offscreen GUI smoke、断连/取消路径、onedir/frozen EXE 分层验收。
 
-[`py-hosttool`](./py-hosttool) 面向 **FPGA / SoPC / 嵌入式板卡的 PySide6 上位机开发**，核心资产来自 `ArqMinSystem_v1.1` 与 `MasterController_v1.4` 两套实际工程，而不是从零拼 GUI demo。
-
-### 🌟 核心卖点
-
-- **成熟窗口框架**：复用无边框标题栏、置顶、最小化、最大化 / 还原、原生边缘缩放等完整桌面交互。
-- **两类现成布局**：设备诊断仪表盘 + 协议串口工作台，可直接作为新工具的信息架构起点。
-- **工程级串口资产**：彩色 RX/TX 日志、动态 HEX、滚动保持、周期发送、子串口窗口，以及 `QThread + command queue` 的 pySerial 所有权模型。
-- **模板与真实参考工程一起提供**：`assets/template/` 可直接起项目，`reference_projects/` 用于追溯成熟实现。
-- **复用边界明确**：窗口、布局、日志和线程框架可以继承；寄存器、协议帧、命令字和业务状态机必须按新项目重建。
-
-适合板卡调试工具、设备诊断 / 性能仪表盘、协议收发工作台，以及现有 PySide6 项目的结构化改造。
+CAN 上位机只作为经过过滤的设计来源。仓库不包含其业务协议、CAN ID、遥测字段、厂家 SDK、设备序列号、现场日志、EXE 或构建产物。
 
 ---
 
-## 🤖 deepseek-subagent —— 让 Codex 拥有可持续复用的低成本子 Agent
-
-[`deepseek-subagent`](./deepseek-subagent) 是一个 **仅面向 Codex** 的 DeepSeek 子 Agent 集成 Skill，通过本机桥固定路由到 OpenCode Go 的 `deepseek-v4-flash`。
-
-```text
-spawn_agent(agent_type="DeepSeek")
-    ↓
-opencode-go-bridge
-    ↓
-OpenCode Go / deepseek-v4-flash
-```
-
-### 🌟 核心卖点
-
-- **进程内复用 + 持久交接**：同一 Codex 进程内优先通过 `send_input` 继续使用已熟悉项目的子 Agent；完整退出、Windows 重启、`shutdown` 或 `not_found` 后，不伪称恢复旧 Agent，而是通过 `.local/handoffs` 中的可验证事实让 successor 接续工作。
-- **一键 bootstrap + 持久权限**：`双击运行prepare.cmd` 会先执行 `bootstrap`，保留已有 `sandbox_workspace_write.writable_roots`，只追加当前 Skill 的 `.local\handoffs`，并在需要时选择 `workspace-write`；随后执行 `repair` 持久配置 Multi-Agent V1 与本地 bridge。
-- **V1 fail-closed**：每个 Task 首次 DeepSeek 操作前仍通过 `prepare --json` 校验实际 transport；当前 Task 不是 V1 时明确失败，不静默回落到不兼容路径。
-- **逐轮可验证 continuity**：每轮子 Agent 工作都绑定稳定 role / scope / project root，并要求追加 handoff record；父 Agent 校验新增记录和 marker 后才接受结果。
-- **关闭 / 替换权属于用户**：任务完成、暂时 idle、容量压力、进程退出或 `not_found` 都不会自动触发 `close_agent`；需要 successor 或关闭旧 Agent 时由用户决定。
-- **低成本固定路由**：把适合扫描、review、局部实现和重复工作的任务稳定交给 DeepSeek，降低长期多 Agent 协作成本。
-- **正式可诊断运行时**：支持 `bootstrap`、`prepare`、setup / repair / disable / uninstall、`status`、`doctor --e2e`、transport、bridge、credential、Agent roster 与 handoff 管理。
-- **数据边界明确**：本机桥会把完成任务所需的提示词、上下文和源码转发到外部 OpenCode Go 服务，私有代码使用前应确认边界。
-
-### ⚠️ 首次安装 / 更新后的初始化（重要）
-
-从 v1.7.3 起，`双击运行prepare.cmd` 负责一次性完成 **handoff 写权限 bootstrap + Multi-Agent V1 repair**。推荐在首次安装、更新 Skill 或配置发生漂移后执行：
-
-```text
-双击 deepseek-subagent/双击运行prepare.cmd
-        ↓
-[1/2] bootstrap：持久加入 .local\handoffs writable root
-        ↓
-[2/2] repair：持久配置 Multi-Agent V1 与本地 bridge
-        ↓
-完整退出 Codex
-        ↓
-重新启动 Codex，并创建新的对话 / Task
-        ↓
-再创建 DeepSeek 子 Agent
-```
-
-- **配置是持久的**：初始化成功后，正常的后续 Codex / Windows 重启不需要每次重复运行这个脚本。
-- **重复运行安全**：`bootstrap` 是幂等的，不会重复添加 handoff writable root，也不会覆盖已有 writable roots；如果用户已经选择 `danger-full-access`，不会降级。
-- **V2 Task 不能原地切回 V1**：如果当前 Task 已初始化为 Multi-Agent V2，即使修复成功，也必须在重启 / 配置生效后创建新的 Task。
-- 如果更换 Skill 安装目录、Codex 配置被其它工具改动、handoff 写入再次触发提权，或 V1 门禁提示配置漂移，可重新运行该脚本后再重启 Codex。
-
-适合大型 RTL / Vivado / Vitis / Python 工程中的专项助手、代码探索、review 和低成本多 Agent 协作。
-
----
-
-## 🧩 三个 Skill 如何组合
-
-在一个完整的 SoPC / FPGA 项目中，可以形成这样的协作方式：
+## 🧩 两个 Skill 如何组合
 
 ```text
 rtl-style
-  └─ 约束 RTL 创建 / 修改 / review
+  └─ 约束 RTL 的接口、注释、CDC 与时序结构
        ↓
 py-hosttool
-  └─ 快速构建稳定的调试与诊断上位机
-       ↓
-deepseek-subagent
-  └─ 让多个可持续协作的子 Agent 分担扫描、评审、修改和专项任务
+  └─ 构建配套的串口/字节通道调试与诊断工具
 ```
 
-例如：
-
-- 主 Agent 负责总体架构判断和跨工程决策；
-- DeepSeek RTL 助手长期负责某一组 RTL / timing 问题；
-- `rtl-style` 约束它的代码和 review 标准；
-- Python 助手按 `py-hosttool` 的设计语言开发对应上位机；
-- 当前 Codex 进程内继续复用已经熟悉项目的子 Agent；跨重启则让 successor 读取持久 handoff 中的已验证事实，而不是假装恢复旧运行态。
-
-这也是这个仓库真正想解决的问题：**不只是给 AI 一套 prompt，而是给 AI 一套更接近真实工程团队的工作方式。**
-
----
+RTL 开发可以先使用 `rtl-style` 做设计门禁和 code review，再使用 `py-hosttool` 构建对应的板级控制、遥测或协议调试工具。两者也可以独立使用。
 
 ## 📁 仓库结构
 
@@ -194,75 +103,59 @@ sopc-skill/
 │   └── test_release_versions.py
 ├── rtl-style/
 │   ├── VERSION
-│   ├── CHANGELOG.md
-│   ├── README.md
 │   ├── SKILL.md
-│   ├── agents/
 │   ├── scripts/
-│   ├── tests/
-│   └── references/
-│
-├── py-hosttool/
-│   ├── VERSION
-│   ├── CHANGELOG.md
-│   ├── README.md
-│   ├── SKILL.md
 │   ├── references/
-│   ├── scripts/
-│   ├── assets/
-│   │   ├── template/
-│   │   └── reference_projects/
-│   └── ...
-│
-└── deepseek-subagent/
-    ├── SKILL.md
+│   └── tests/
+└── py-hosttool/
     ├── VERSION
-    ├── 双击运行prepare.cmd
-    ├── agents/
-    ├── evals/
-    ├── references/
-    ├── runtime/
+    ├── SKILL.md
     ├── scripts/
-    └── tests/
+    ├── references/
+    └── assets/
+        ├── template/
+        └── reference_projects/
 ```
-
----
 
 ## 🚀 使用方式
 
-将需要的目录作为自定义 Skill 引入 ChatGPT / Codex，或在项目中直接调用对应 Skill。
-
-示例：
+将需要的 Skill 目录作为一个完整目录引入 ChatGPT / Codex。包含 `scripts/`、`references/` 或 `assets/` 的 Skill 不应只复制 `SKILL.md`。
 
 ```text
 Use $rtl-style to review this AXI4-Stream scheduler and identify timing-by-construction risks before I run Vivado.
 ```
 
 ```text
-Use $py-hosttool to build a PySide6 diagnostic host tool for this FPGA board, reusing the mature frameless window and serial workbench assets.
+Use $py-hosttool to build a PySide6 diagnostic application with the reusable serial worker, bounded capture recording and offscreen GUI smoke tests.
 ```
 
-```text
-Use $deepseek-subagent to verify the Codex DeepSeek V1 route, reuse current-process children when possible, and preserve verified project continuity through durable handoffs.
-```
+## ✅ 验证与发布
 
-仓库级版本一致性可以直接运行：
+在仓库根目录检查两个 Skill 的版本元数据：
 
-```bash
+```powershell
 python scripts/validate_release_versions.py
 python -B -m unittest discover -s tests -v
 ```
 
-对于包含 scripts / assets / runtime 的 Skill，建议使用完整目录，不要只复制 `SKILL.md`。
+分别验证两个 Skill：
 
----
+```powershell
+python -B -m unittest discover -s rtl-style/tests -v
+python py-hosttool/scripts/validate_skill.py
+```
+
+`py-hosttool` 的严格发布检查会要求 PySide6、pyserial、pytest 和可选外部 validator 均已安装：
+
+```powershell
+python py-hosttool/scripts/validate_skill.py --strict
+```
+
+验证结果必须区分静态检查、单元测试、offscreen GUI、真实 Windows UI、真实设备、frozen EXE 和目标机运行。未执行的项目明确标为未验证。
 
 ## 🔐 安全与边界
 
-这个仓库强调一个原则：**没有验证过的事情，不要声称验证过。**
-
-- 没跑 Vivado 仿真 / 综合 / 实现，不声称 RTL 已通过；
-- 没启动 GUI / 串口 / PyInstaller，不声称上位机已完成端到端验证；
-- 静态 checker 只代表 preflight，不替代实际工具链；
-- reference project 是复用资产，不代表业务协议可以直接照搬；
-- `deepseek-subagent/.local` 中的真实 credential、bridge/runtime 状态、Agent roster 与 handoff 属于本机持久数据，不应提交到仓库。
+- `assets/reference_projects/` 用于追溯代码形状，不提供新项目协议和寄存器事实。
+- 业务协议、CRC 变体、字节序、寄存器权限和自动重试策略必须来自用户提供的 source of truth。
+- 设备日志、串口抓包、用户设置、凭据、构建目录、缓存和 EXE 不进入 Skill 仓库。
+- 静态 checker、模拟 transport 和 offscreen smoke 不能替代真实设备联调或真实 Windows 交付验证。

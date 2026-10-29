@@ -12,6 +12,7 @@ project/
 │  ├─ transport.py          # 可选的 byte-channel 契约；串口是其中一种实现
 │  ├─ serial_worker.py      # 串口线程
 │  ├─ serial_console.py     # 通用串口 UI
+│  ├─ recording.py          # 后台记录与只读回放
 │  ├─ protocol.py           # 纯函数/流解析
 │  ├─ client.py             # 请求、超时、序列号、重试
 │  ├─ services.py           # 业务操作
@@ -93,6 +94,7 @@ byte-channel 至少定义 `open(settings) -> opened/error`、`read -> bytes`、`
 - opened/received/sent/error/closed 等异步结果带 connection generation，或由唯一 adapter 在边界处补齐；旧连接和已取消流程的回调不得触发新状态；
 - 命令队列有明确的背压/丢弃策略，控制命令不会被无限周期发送饿死；写入、读取和关闭异常收敛到单一断连路径；
 - transport 可由 fake/loopback 实现替换，以便测试半帧、断连、超时、迟到响应和关闭。
+- transport 接受 `write` 或硬件驱动返回成功，只证明传输栈接受；业务完成必须由协议确认、回读或其他明确证据判定。
 
 这些是生命周期不变量，不要求所有项目使用相同的 QThread 组织方式；若采用 QObject moved-to-QThread 或其他实现，也必须满足相同的所有权、唤醒、generation 和停止语义。
 

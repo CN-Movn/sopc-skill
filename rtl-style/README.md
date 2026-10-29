@@ -2,7 +2,7 @@
 
 面向 AMD/Xilinx Vivado 的 Verilog RTL 创建、修改与评审 skill，强调中文设计意图注释、Timing by Construction、CDC/握手边界、可预测的综合推断和诚实的验证边界。
 
-Current release: v2.2.2
+Current release: v0.1.5
 
 ## 目录
 
@@ -40,6 +40,6 @@ README 当前版本同步
 打包 / commit / tag
 ```
 
-每次正式发布时，`VERSION`、CHANGELOG 正式标题、README 当前版本和（若维护文件清单）manifest 必须同步；版本检查与 regression tests 全部通过后再提交。推荐使用带 Skill 名称的 tag，例如 `rtl-style-v2.2.2`，避免与同仓库的其他 Skill 混淆。
+每次正式发布时，仓库 `VERSION`、Skill `VERSION`、CHANGELOG 正式标题和 README 当前版本必须同步；版本检查与 regression tests 全部通过后再提交。推荐使用带 Skill 名称的 tag，例如 `rtl-style-v0.1.5`，避免与同仓库的其他 Skill 混淆。
 
 版本规则采用 Semantic Versioning：规则修正、checker 修复、测试增强、模板 bugfix 和兼容性工程增强使用 PATCH；新增向后兼容能力使用 MINOR；改变核心行为合同或兼容性时才使用 MAJOR。

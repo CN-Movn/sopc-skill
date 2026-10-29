@@ -71,6 +71,8 @@ Linux offscreen smoke test不能替代 Windows 原生边缘缩放和置顶测试
 
 这些测试可在 pytest 中完成；真实设备联调另列为未验证或现场验证，不得用 offscreen 构造替代。
 
+记录回放还需要覆盖二进制 payload 无损、方向过滤、JSONL 源数据与 CSV 可读导出一致、记录队列过载显式失败，以及 recorder/reader 的有界关闭。
+
 ## 6. Windows 运行检查
 
 Windows 上人工检查：
@@ -133,5 +135,7 @@ Windows 上人工检查：
 - 串口设备联调通过；
 - PyInstaller 生成通过；
 - 目标电脑运行通过。
+
+传输 API 返回成功只进入“发送被接受”层级；只有协议回读、对端确认或业务状态证据才能进入“业务完成”层级。详细实践见 `references/can_hosttool_patterns.md`。
 
 未执行的层级明确写“未验证”，不能用“应该可以”替代事实。

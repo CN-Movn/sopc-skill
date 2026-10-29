@@ -1,14 +1,15 @@
 ---
 name: py-hosttool
-description: "Build, refactor, review, test, and package stable PySide6 desktop host tools and control/debugging applications for FPGA, SoPC, embedded-board, and serial/protocol workflows. Use when Codex should create a Python host tool that follows the proven ArqMinSystem_v1.1 and MasterController_v1.4 design language: custom frameless Windows chrome with pin/minimize/maximize/close controls, instrument-dashboard or protocol-workbench layouts, reusable serial console, threaded pySerial I/O, protocol parsing, diagnostics, logs, automated workflows, pytest coverage, and PyInstaller delivery."
+description: "Build, refactor, review, test, and package PySide6 desktop host tools for FPGA, SoPC, embedded-board, and serial/protocol workflows. Use when Codex should create a Python control/debug application with reusable Windows chrome, dashboard or protocol-workbench layouts, threaded transport I/O, protocol parsing, diagnostics, bounded recording/replay, automated workflows, pytest coverage, or PyInstaller delivery."
 ---
 
 # Python 上位机开发 Skill
 
-本 skill 用于指导 coding agent / Codex 创建、改造、审核和交付 PySide6 上位机。其设计基线来自：
+本 skill 用于指导 coding agent / Codex 创建、改造、审核和交付 PySide6 上位机。其设计基线来自多项工程资产：
 
 - `ArqMinSystem_v1.1`：设备连接、配置控制、一键流程、节点诊断、性能监测、操作/诊断日志；
 - `MasterController_v1.4`：协议帧生成与解析、通用串口工作台、子串口窗口、彩色日志、周期发送、Windows 单文件打包。
+- 一个经过通用化过滤的 CAN 上位机：有界记录/回放、transport 生命周期、模拟后端、请求隔离和分层交付验证。业务协议、字段、厂家 SDK、现场数据和构建产物不进入 skill。
 
 目标不是机械复制两个旧工程，而是提炼其稳定架构、视觉语言和可复用资产，使新上位机可以快速起步并保持一致体验。
 
@@ -39,11 +40,13 @@ description: "Build, refactor, review, test, and package stable PySide6 desktop 
 - 协议流必须处理分段、粘包、噪声前缀、CRC/checksum 错误和剩余缓存，不能假设一次 `read()` 等于一帧。
 - 周期刷新、周期发送和自动流程必须有取消/停止路径；断连时清除 busy、timer、pending request 和差分基线。
 - 协议实现必须以用户确认的协议文档/寄存器来源为 source of truth，并以固定 golden vectors 锁定长度语义、字节序和 CRC/checksum 变体；不能从来源工程猜测字段。
+- 传输层 API 接受发送只代表驱动或通道接受；除非协议和实测证据确认，不得把它显示成对端解析成功、设备状态已更新或业务操作完成。
 - 自动重试只允许用于明确幂等的请求，或协议提供了去重/幂等键；写寄存器、脉冲和其他不可幂等命令不得因超时自动重放。
 - 可能跨连接或取消边界晚到的 client/service/workflow 回调必须携带并校验 generation；布尔 `connected` 不能单独用来接收旧连接的数据。
 - 计数器差分必须考虑回绕、硬件清零和操作后重新建基线，不能制造虚假吞吐尖峰。
 - 写寄存器必须依据访问属性和写掩码建立白名单，RO/保留位/脉冲寄存器不能被通用写入口误写。
 - 日志同时服务“现场操作”和“问题复盘”：保留时间戳、方向、原始数据、语义结果、错误原因与导出能力。
+- 可复现的数据链路应具备后台有界记录、无损原始 bytes 和按方向的只读回放；记录队列过载必须显式报告，不能静默丢数据。
 - 不把 `release/`、`build/`、`dist/`、`.pytest_cache/`、`__pycache__/`、EXE、日志和用户环境绝对路径打包进 skill。
 - 不声称未实际执行的 GUI、串口、设备联调或 PyInstaller 打包已验证通过。
 - 不因复用模板而保留旧项目名称、版本号、设备名、默认路径、协议字段或 ARQ 专有文本。
@@ -61,6 +64,7 @@ description: "Build, refactor, review, test, and package stable PySide6 desktop 
 - GUI/协议/服务/工作流/模型的分层：`references/architecture_workflow.md`。
 - 哪些资产可直接复用、哪些必须替换：`references/reuse_boundaries.md`。
 - 测试、静态检查、PyInstaller 和交付边界：`references/verification_and_delivery.md`。
+- CAN 上位机沉淀出的通用协议、记录回放、模拟 transport 和分层验收模式：`references/can_hosttool_patterns.md`。
 - 模板、示例、原始工程资产索引：`references/asset_catalog.md`。
 - 开工前需要向用户确认的关键事实：`review_questions.md`。
 

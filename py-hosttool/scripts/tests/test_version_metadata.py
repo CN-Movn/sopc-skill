@@ -21,18 +21,18 @@ class VersionMetadataTests(unittest.TestCase):
     def test_invalid_version_file_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / "VERSION").write_text("version=1.2.2\n", encoding="utf-8")
-            (root / "CHANGELOG.md").write_text("## [1.2.2] - 2026-08-24\n", encoding="utf-8")
-            (root / "README.md").write_text("Current release: v1.2.2\n", encoding="utf-8")
+            (root / "VERSION").write_text("version=0.1.5\n", encoding="utf-8")
+            (root / "CHANGELOG.md").write_text("## [0.1.5] - 2026-10-29\n", encoding="utf-8")
+            (root / "README.md").write_text("Current release: v0.1.5\n", encoding="utf-8")
             errors = VALIDATOR.validate(root)
             self.assertIn("VERSION must contain only MAJOR.MINOR.PATCH SemVer", errors)
 
     def test_stale_current_release_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / "VERSION").write_text("1.2.2\n", encoding="utf-8")
-            (root / "CHANGELOG.md").write_text("## [1.2.2] - 2026-08-24\n", encoding="utf-8")
-            (root / "README.md").write_text("Current release: v1.2.1\n", encoding="utf-8")
+            (root / "VERSION").write_text("0.1.5\n", encoding="utf-8")
+            (root / "CHANGELOG.md").write_text("## [0.1.5] - 2026-10-29\n", encoding="utf-8")
+            (root / "README.md").write_text("Current release: v0.1.4\n", encoding="utf-8")
             errors = VALIDATOR.validate(root)
             self.assertIn("README.md current release does not match VERSION", errors)
 

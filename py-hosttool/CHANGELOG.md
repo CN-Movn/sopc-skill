@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## [0.1.5] - 2026-10-29
+
+### Added
+
+- 将 CAN 上位机项目中的通用工程模式沉淀为 `references/can_hosttool_patterns.md`，记录协议来源核对、驱动/业务完成分层、generation、记录回放和分层验收边界。
+- 在 starter template 中增加纯 Python 后台记录与 JSONL/CSV 回放资产，并增加二进制无损、方向过滤和显式关闭回归测试。
+- 增加第三个设计输入的来源记录，同时排除 CAN 业务协议、CAN ID、遥测字段、厂家 SDK、现场日志、EXE 和构建产物。
+
+### Changed
+
+- 将 Skill 当前发布版本统一为 `0.1.5`，并同步 README、manifest 与仓库版本检查。
+- 明确“驱动接受发送”不等于“对端解析或业务执行成功”，避免上位机把传输成功显示成业务成功。
 
 ## [1.2.2] - 2026-08-24
 

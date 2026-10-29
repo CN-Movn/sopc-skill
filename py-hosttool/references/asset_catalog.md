@@ -11,6 +11,7 @@
 - `hosttool/window_chrome.py`：无边框窗口、矢量按钮、置顶组和 Windows resize；
 - `hosttool/serial_worker.py`：通用串口线程；
 - `hosttool/serial_console.py`：成熟串口面板与子窗口；
+- `hosttool/recording.py`：后台有界 JSONL/CSV 记录与只读回放；
 - `hosttool/main_window.py`：protocol-workbench 模板；
 - `hosttool/dashboard_window.py`：instrument-dashboard 模板；
 - `tests/`：不依赖真实设备的静态/纯函数测试骨架；
@@ -26,6 +27,7 @@
 | 串口 worker 与 byte channel | 有 | 只能按 `serial_logging.md` 生命周期、generation、背压和 shutdown 契约复用 |
 | protocol parser、CRC、寄存器编码 | 无 | 依据用户 source of truth 和 golden vectors 新建/重写 |
 | request client、services、diagnostics、models、workflows | 仅来源工程有参考 | 按契约/模式定点复用；禁止复制业务字段、重试和流程事实 |
+| 记录、导出与离线回放 | 有通用实现 | 从 `recording.py` 起步；按项目定义来源、格式和脱敏边界 |
 | 协议单测、fake transport、offscreen GUI smoke | 仅有结构 | 测试向量、断连/重连断言和目标控件必须重建 |
 | PyInstaller spec/build | 有骨架 | 重新核对依赖、架构、DLL 和 frozen smoke；先交付 onedir |
 
@@ -69,7 +71,11 @@
 
 来源工程的协议向量、寄存器和业务流程不是新项目事实；只能用来理解测试形状，不能代替新项目 source of truth。
 
-## 4. 选择顺序
+## 4. CAN 上位机的沉淀边界
+
+`can_hosttool_v2.0.3` 只作为设计输入，不整体进入本目录。其通用模式已写入 `references/can_hosttool_patterns.md`，通用记录/回放代码已进入 starter template。CAN 业务字段、厂家 SDK、设备标识、现场日志和构建产物均已排除。
+
+## 5. 选择顺序
 
 1. 先读 `SKILL.md`。
 2. 根据任务阅读相关 reference。

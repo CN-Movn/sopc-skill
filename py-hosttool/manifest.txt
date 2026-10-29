@@ -2,6 +2,7 @@ CHANGELOG.md
 README.md
 SKILL.md
 VERSION
+assets/template/py_hosttool_template/hosttool/recording.py
 assets/reference_projects/ArqMinSystem_v1.1/README.md
 assets/reference_projects/ArqMinSystem_v1.1/client.py
 assets/reference_projects/ArqMinSystem_v1.1/diagnostics.py
@@ -53,9 +54,11 @@ assets/template/py_hosttool_template/main.py
 assets/template/py_hosttool_template/requirements.txt
 assets/template/py_hosttool_template/tests/test_gui_smoke.py
 assets/template/py_hosttool_template/tests/test_helpers.py
+assets/template/py_hosttool_template/tests/test_recording.py
 manifest.txt
 references/architecture_workflow.md
 references/asset_catalog.md
+references/can_hosttool_patterns.md
 references/layout_patterns.md
 references/reuse_boundaries.md
 references/serial_logging.md
