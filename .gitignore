@@ -1,10 +1,24 @@
-# Python cache and local artifacts
+# Python caches and local environments
 **/__pycache__/
 **/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.venv/
+**/venv/
+
+# Local logs, temporary files and platform metadata
 **/*.log
 **/*.tmp
+**/.DS_Store
+**/Thumbs.db
 
-# deepseek-subagent private credentials and generated localhost tokens
-deepseek-subagent/.local/opencode-go.key
-deepseek-subagent/.local/local-bridge-token.txt
-deepseek-subagent/.local/local-bridge-token-state.json
+# Generated build and delivery artifacts
+**/build/
+**/dist/
+**/release/
+**/*.exe
+
+# Bootstrap staging directories
+**/.*.bootstrap-*/
+**/.tmp/
